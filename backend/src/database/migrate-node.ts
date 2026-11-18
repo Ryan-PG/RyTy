@@ -45,8 +45,19 @@ export async function runMigrations(client: Client, migrationsDir: string): Prom
     const content = await readFile(path.join(migrationsDir, file), "utf8");
     const statements = content
       .split("--> statement-breakpoint")
-      .map((s) => s.trim())
+      .map((s) =>
+        s
+          .split("\n")
+          // libsql's local client fails on statements with leading `--`
+          // comments; strip full-line comments before executing.
+          .filter((line) => !/^\s*--/.test(line))
+          .join("\n")
+          .trim(),
+      )
       .filter((s) => s.length > 0);
+    // batch() wraps the statements in a transaction. Statement comment
+    // lines are stripped above because the local libsql client rejects
+    // statements with leading comments.
     await client.batch(
       statements.map((sql) => ({ sql, args: [] })),
       "write",

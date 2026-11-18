@@ -67,13 +67,32 @@ export function createApp(env: RuntimeEnv): Hono {
   protectedApi.route("/activities", activityRoutes());
   protectedApi.route("/timer", timerRoutes());
   protectedApi.route("/reports", reportRoutes());
+
+  // Minimal user list for report filters. Allowed for admins, and for all
+  // users when report visibility is "all_users".
+  protectedApi.get("/users", async (c) => {
+    const user = c.get("user");
+    const appSettings = await services.settings.getAppSettings();
+    const canSeeAll =
+      user.role === "admin" ||
+      appSettings.reportsVisibility === ("all_users" as const);
+    if (!canSeeAll) {
+      return c.json(
+        { error: { code: "reports_private", message: "Report visibility is private" } },
+        403 as 403,
+      );
+    }
+    const users = await services.users.list();
+    return c.json({ data: users.map((u) => ({ id: u.id, username: u.username })) });
+  });
+
   app.route("/api", protectedApi);
 
   // Admin endpoints.
   const adminApi = new Hono();
   adminApi.use("*", requireAuth());
   adminApi.use("*", requireAdmin());
-  adminApi.route("/users", adminRoutes());
+  adminApi.route("/", adminRoutes());
   app.route("/api/admin", adminApi);
 
   return app;

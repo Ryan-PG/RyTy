@@ -1,5 +1,5 @@
--- RyTy initial schema. Compatible with both Cloudflare D1 and SQLite
--- (libsql). Statements are separated by `--> statement-breakpoint`.
+-- RyTy initial schema. Compatible with both Cloudflare D1 and SQLite.
+-- One migration file; statements are applied in order.
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL,

@@ -6,14 +6,17 @@ import { ROLES } from "@ryty/shared";
 import { hashPassword } from "../auth/password";
 
 /** Public setup status (never exposes secret values). */
-export async function getSetupStatus(services: Services): Promise<SetupStatus> {
+export async function getSetupStatus(services: Services): Promise<SetupStatus & { appName: string; defaultLanguage: string }> {
   const admins = await services.users.countActiveAdmins();
   const username = services.config.initialAdminUsername ?? "admin";
   const password = services.config.initialAdminPassword;
+  const appSettings = await services.settings.getAppSettings();
   return {
     adminExists: admins > 0,
     bootstrapConfigured: Boolean(password),
     bootstrapUsername: password ? username : null,
+    appName: appSettings.appName,
+    defaultLanguage: appSettings.defaultLanguage,
   };
 }
 
