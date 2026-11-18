@@ -1,0 +1,395 @@
+import { describe, it, expect, beforeAll } from "vitest";
+import { createClient } from "@libsql/client";
+import { createApp } from "../src/index";
+import { createLibsqlDatabase } from "../src/database/adapters/libsql";
+import { resolveMigrationsDir, runMigrations } from "../src/database/migrate-node";
+import type { Hono } from "hono";
+
+/**
+ * Integration tests: the same Hono app that runs in production, against an
+ * in-memory SQLite database through the libsql adapter (the Node/Docker
+ * target). Business rules are shared with the D1 adapter.
+ */
+
+const BOOTSTRAP_PASSWORD = "bootstrap-test-password";
+
+let app: Hono;
+let adminCookie: string;
+
+async function call(
+  method: string,
+  path: string,
+  body?: unknown,
+  cookie?: string,
+  ip = "203.0.113.10",
+): Promise<{ status: number; json: any }> {
+  const res = await app.request(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}),
+      Origin: "http://localhost",
+      "X-Forwarded-For": ip,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    // no body
+  }
+  return { status: res.status, json };
+}
+
+function setCookieOf(res: { headers: Headers }): string {
+  return res.headers.get("set-cookie")?.split(";")[0] ?? "";
+}
+
+beforeAll(async () => {
+  const client = createClient({ url: ":memory:" });
+  const migrationsDir = await resolveMigrationsDir();
+  if (!migrationsDir) throw new Error("migrations directory not found");
+  await runMigrations(client, migrationsDir);
+  app = createApp({
+    db: createLibsqlDatabase(client),
+    config: {
+      initialAdminUsername: "admin",
+      initialAdminPassword: BOOTSTRAP_PASSWORD,
+      appTimezone: "UTC",
+      defaultLanguage: "en",
+    },
+  });
+
+  // Bootstrap admin login → forced password change → normal sign-in.
+  const bootstrap = await login("admin", BOOTSTRAP_PASSWORD);
+  expect(bootstrap).toBeTruthy();
+  const change = await call(
+    "POST",
+    "/api/auth/change-password",
+    { currentPassword: BOOTSTRAP_PASSWORD, newPassword: "AdminNewPass123" },
+    bootstrap,
+  );
+  expect(change.status).toBe(200);
+  expect(change.json.data.mustChangePassword).toBe(false);
+  adminCookie = await login("admin", "AdminNewPass123");
+
+  // Create a regular user via the admin API.
+  const created = await call(
+    "POST",
+    "/api/admin/users",
+    { username: "sara", password: "SaraPass12345", role: "user" },
+    adminCookie,
+  );
+  expect(created.status).toBe(201);
+});
+
+/** Sign in and return the raw session cookie. */
+async function login(username: string, password: string): Promise<string> {
+  const res = await app.request("/api/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://localhost",
+      "X-Forwarded-For": "203.0.113.10",
+    },
+    body: JSON.stringify({ username, password }),
+  });
+  if (res.status !== 200) throw new Error(`login failed for ${username}: ${res.status}`);
+  return setCookieOf(res);
+}
+
+describe("auth", () => {
+  it("rejects wrong credentials without leaking details", async () => {
+    const res = await call("POST", "/api/auth/login", {
+      username: "admin",
+      password: "wrong-password",
+    });
+    expect(res.status).toBe(401);
+    expect(res.json.error.code).toBe("invalid_credentials");
+  });
+
+  it("blocks protected endpoints without a session", async () => {
+    const res = await call("GET", "/api/activities");
+    expect(res.status).toBe(401);
+  });
+
+  it("does not allow public registration", async () => {
+    const res = await call("POST", "/api/admin/users", {
+      username: "intruder",
+      password: "Password123",
+      role: "admin",
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("rate-limits repeated login failures", async () => {
+    let status = 0;
+    // A dedicated client IP so the limiter blocks only this probe.
+    for (let i = 0; i < 6; i++) {
+      const res = await call(
+        "POST",
+        "/api/auth/login",
+        { username: "ratelimit-probe", password: "nope" },
+        undefined,
+        "198.51.100.7",
+      );
+      status = res.status;
+    }
+    expect(status).toBe(429);
+  });
+});
+
+describe("activities", () => {
+  let activityId: number;
+
+  it("creates a manual range activity in the app timezone", async () => {
+    const res = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "range", title: "Deep work", start: "2026-11-19T09:00", end: "2026-11-19T10:30" },
+      adminCookie,
+    );
+    expect(res.status).toBe(201);
+    expect(res.json.data.durationSeconds).toBe(5400);
+    expect(res.json.data.occurredOn).toBe("2026-11-19");
+    activityId = res.json.data.id;
+  });
+
+  it("rejects inverted ranges", async () => {
+    const res = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "range", title: "Bad", start: "2026-11-19T12:00", end: "2026-11-19T11:00" },
+      adminCookie,
+    );
+    expect(res.status).toBe(400);
+    expect(res.json.error.code).toBe("invalid_range");
+  });
+
+  it("detects overlapping activities and can force-save", async () => {
+    const payload = {
+      entryType: "range",
+      title: "Overlap",
+      start: "2026-11-19T10:00",
+      end: "2026-11-19T11:00",
+    };
+    const rejected = await call("POST", "/api/activities", payload, adminCookie);
+    expect(rejected.status).toBe(409);
+    expect(rejected.json.error.code).toBe("activity_overlap");
+
+    const allowed = await call("POST", "/api/activities", { ...payload, allowOverlap: true }, adminCookie);
+    expect(allowed.status).toBe(201);
+  });
+
+  it("creates duration-only activities without timestamps", async () => {
+    const res = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "duration", title: "مطالعه کتاب", durationSeconds: 2700, occurredOn: "2026-11-18" },
+      adminCookie,
+    );
+    expect(res.status).toBe(201);
+    expect(res.json.data.startedAt).toBeNull();
+    expect(res.json.data.occurredOn).toBe("2026-11-18");
+  });
+
+  it("lists activities for the owner only", async () => {
+    const mine = await call("GET", "/api/activities", undefined, adminCookie);
+    expect(mine.status).toBe(200);
+    expect(mine.json.data.total).toBeGreaterThan(0);
+    for (const item of mine.json.data.data) {
+      expect(item.userId).toBe(1);
+    }
+  });
+
+  it("edits and deletes own activities", async () => {
+    const patched = await call(
+      "PATCH",
+      `/api/activities/${activityId}`,
+      { title: "Deep work (edited)", description: "updated" },
+      adminCookie,
+    );
+    expect(patched.status).toBe(200);
+    expect(patched.json.data.title).toBe("Deep work (edited)");
+
+    const deleted = await call("DELETE", `/api/activities/${activityId}`, undefined, adminCookie);
+    expect(deleted.status).toBe(200);
+    const gone = await call("GET", `/api/activities/${activityId}`, undefined, adminCookie);
+    expect(gone.status).toBe(404);
+  });
+});
+
+describe("timer lifecycle", () => {
+  it("runs start → pause → resume → stop with server-side timekeeping", async () => {
+    const started = await call(
+      "POST",
+      "/api/timer/start",
+      { title: "Timed task" },
+      adminCookie,
+    );
+    expect(started.status).toBe(201);
+    expect(started.json.data.state).toBe("running");
+
+    const double = await call("POST", "/api/timer/start", { title: "Second" }, adminCookie);
+    expect(double.status).toBe(409);
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const paused = await call("POST", "/api/timer/pause", {}, adminCookie);
+    expect(paused.status).toBe(200);
+    expect(paused.json.data.state).toBe("paused");
+    expect(paused.json.data.accumulatedSeconds).toBeGreaterThan(0);
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const resumed = await call("POST", "/api/timer/resume", {}, adminCookie);
+    expect(resumed.status).toBe(200);
+    expect(resumed.json.data.state).toBe("running");
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const stopped = await call("POST", "/api/timer/stop", {}, adminCookie);
+    expect(stopped.status).toBe(200);
+    expect(stopped.json.data.entryType).toBe("timer");
+    expect(stopped.json.data.durationSeconds).toBeGreaterThanOrEqual(2);
+    expect(stopped.json.data.startedAt).not.toBeNull();
+
+    const active = await call("GET", "/api/timer/active", undefined, adminCookie);
+    expect(active.json.data).toBeNull();
+  }, 15000);
+
+  it("rejects timer operations without an active timer", async () => {
+    const res = await call("POST", "/api/timer/stop", {}, adminCookie);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("reports and visibility", () => {
+  beforeAll(async () => {
+    // Give the admin one activity today under the current (private) mode.
+    await call(
+      "POST",
+      "/api/activities",
+      { entryType: "range", title: "Private work", start: "2026-11-20T08:00", end: "2026-11-20T09:00" },
+      adminCookie,
+    );
+  });
+
+  it("users cannot see others' data in private mode", async () => {
+    const sara = await login("sara", "SaraPass12345");
+    const res = await call("GET", "/api/reports/daily?date=2026-11-20&userId=1", undefined, sara);
+    expect(res.status).toBe(403);
+    expect(res.json.error.code).toBe("reports_private");
+
+    const own = await call("GET", "/api/reports/daily?date=2026-11-20", undefined, sara);
+    expect(own.status).toBe(200);
+    expect(own.json.data.totalSeconds).toBe(0);
+  });
+
+  it("users cannot access admin endpoints", async () => {
+    const sara = await login("sara", "SaraPass12345");
+    const res = await call("GET", "/api/admin/users", undefined, sara);
+    expect(res.status).toBe(403);
+  });
+
+  it("all_users mode opens cross-user visibility", async () => {
+    await call(
+      "PATCH",
+      "/api/admin/settings",
+      { reportsVisibility: "all_users" },
+      adminCookie,
+    );
+    const sara = await login("sara", "SaraPass12345");
+    const res = await call("GET", "/api/reports/daily?date=2026-11-20", undefined, sara);
+    expect(res.status).toBe(200);
+    expect(res.json.data.totalSeconds).toBe(3600);
+    expect(res.json.data.byUser[0].username).toBe("admin");
+  });
+
+  it("exports CSV respecting filters", async () => {
+    const res = await app.request("/api/reports/export?from=2026-11-20&to=2026-11-20", {
+      headers: { Cookie: adminCookie },
+    });
+    expect(res.status).toBe(200);
+    // Response.text() strips a leading BOM per the fetch spec — verify the
+    // raw UTF-8 bytes instead (BOM = EF BB BF).
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(bytes[0]).toBe(0xef);
+    expect(bytes[1]).toBe(0xbb);
+    expect(bytes[2]).toBe(0xbf);
+    const text = new TextDecoder().decode(bytes);
+    expect(text).toContain("Private work");
+  });
+});
+
+describe("admin safeguards", () => {
+  it("never removes the last active administrator", async () => {
+    const demote = await call("PATCH", "/api/admin/users/1", { role: "user" }, adminCookie);
+    expect(demote.status).toBe(400);
+    expect(demote.json.error.code).toBe("last_admin");
+
+    const disable = await call("PATCH", "/api/admin/users/1", { isActive: false }, adminCookie);
+    expect(disable.status).toBe(400);
+    expect(disable.json.error.code).toBe("last_admin");
+  });
+
+  it("rejects duplicate usernames", async () => {
+    const res = await call(
+      "POST",
+      "/api/admin/users",
+      { username: "sara", password: "Whatever123", role: "user" },
+      adminCookie,
+    );
+    expect(res.status).toBe(409);
+  });
+
+  it("reset passwords force a change and revoke sessions", async () => {
+    const sara = await login("sara", "SaraPass12345");
+    const reset = await call("POST", "/api/admin/users/2/reset-password", {}, adminCookie);
+    expect(reset.status).toBe(200);
+    const tempPassword = reset.json.data.temporaryPassword as string;
+    expect(tempPassword).toBeTruthy();
+
+    // Old session revoked.
+    const oldSession = await call("GET", "/api/auth/me", undefined, sara);
+    expect(oldSession.status).toBe(401);
+
+    // Forced change on next login, then consume it.
+    const reLogin = await login("sara", tempPassword);
+    const me = await call("GET", "/api/auth/me", undefined, reLogin);
+    expect(me.json.data.mustChangePassword).toBe(true);
+    const change = await call(
+      "POST",
+      "/api/auth/change-password",
+      { currentPassword: tempPassword, newPassword: "SaraFinalPass123" },
+      reLogin,
+    );
+    expect(change.status).toBe(200);
+  });
+
+  it("validates settings updates", async () => {
+    const bad = await call(
+      "PATCH",
+      "/api/admin/settings",
+      { reportsVisibility: "everyone" },
+      adminCookie,
+    );
+    expect(bad.status).toBe(400);
+  });
+});
+
+describe("user isolation", () => {
+  it("users cannot modify another user's activities", async () => {
+    const sara = await login("sara", "SaraFinalPass123");
+    const adminList = await call("GET", "/api/activities", undefined, adminCookie);
+    const someAdminActivity = adminList.json.data.data[0];
+    expect(someAdminActivity).toBeTruthy();
+
+    const res = await call(
+      "DELETE",
+      `/api/activities/${someAdminActivity.id}`,
+      undefined,
+      sara,
+    );
+    expect(res.status).toBe(403);
+    expect(res.json.error.code).toBe("not_owner");
+  });
+});

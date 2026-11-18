@@ -1,0 +1,13 @@
+node_modules
+dist
+.wrangler
+data
+data-test
+.env
+.env.local
+.git
+.github
+*.log
+docs/screenshots
+.DS_Store
+Thumbs.db

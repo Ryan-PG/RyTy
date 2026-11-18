@@ -1,0 +1,43 @@
+# RyTy — Docker Compose deployment.
+#
+# 1. Copy .env.example to .env and set INITIAL_ADMIN_PASSWORD.
+# 2. docker compose up -d --build
+# 3. Open http://localhost:3000 and sign in with the configured
+#    INITIAL_ADMIN_USERNAME / INITIAL_ADMIN_PASSWORD.
+#
+# Data persists in the "ryty-data" volume; rebuilding or updating the image
+# never deletes existing data.
+
+services:
+  ryty:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ryty:latest
+    container_name: ryty
+    restart: unless-stopped
+    ports:
+      - "${RYTY_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      # Ensure sane defaults even if the .env omits them.
+      PORT: 3000
+      DATA_PATH: /data/ryty.db
+    volumes:
+      - ryty-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  ryty-data:

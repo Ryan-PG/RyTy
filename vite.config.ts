@@ -7,9 +7,16 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react(), tailwindcss(), cloudflare()],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "frontend/src"),
-    },
+    alias: [
+      {
+        find: "@ryty/shared",
+        replacement: path.resolve(__dirname, "shared/src/index.ts"),
+      },
+      {
+        find: "@",
+        replacement: path.resolve(__dirname, "frontend/src"),
+      },
+    ],
   },
   build: {
     sourcemap: false,
