@@ -1,0 +1,183 @@
+/** Locale-aware formatting helpers for durations, dates and numbers. */
+
+import type { Language } from "@ryty/shared";
+
+function numberFormatter(language: Language, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
+  try {
+    return new Intl.NumberFormat(language === "fa" ? "fa" : "en", options);
+  } catch {
+    return new Intl.NumberFormat("en", options);
+  }
+}
+
+const twoDigitCache = new Map<Language, Intl.NumberFormat>();
+
+function digits(value: number, language: Language): string {
+  let fmt = twoDigitCache.get(language);
+  if (!fmt) {
+    fmt = numberFormatter(language, { minimumIntegerDigits: 2 });
+    twoDigitCache.set(language, fmt);
+  }
+  return fmt.format(value);
+}
+
+/** "2:05" or "1:02:03" (hours always shown; seconds under a minute only). */
+export function formatDuration(totalSeconds: number, language: Language): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h === 0 && m < 1) {
+    return `${digits(sec, language)}${language === "fa" ? " ثانیه" : "s"}`;
+  }
+  if (h === 0) {
+    return `${digits(m, language)}:${digits(sec, language)}`;
+  }
+  return `${digits(h, language)}:${digits(m, language)}:${digits(sec, language)}`;
+}
+
+/** Compact human duration: "3h 25m" / "۴۵ دقیقه". */
+export function formatDurationCompact(totalSeconds: number, language: Language): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h === 0 && m === 0) {
+    return language === "fa" ? `${digits(s, language)} ثانیه` : `${digits(s, language)}s`;
+  }
+  if (h === 0) {
+    return language === "fa" ? `${digits(m, language)} دقیقه` : `${digits(m, language)}m`;
+  }
+  return language === "fa"
+    ? `${digits(h, language)} ساعت${m > 0 ? ` و ${digits(m, language)} دقیقه` : ""}`
+    : `${h}h${m > 0 ? ` ${m}m` : ""}`;
+}
+
+/** Localized calendar date for a local YYYY-MM-DD string (no TZ math). */
+export function formatLocalDate(date: string, language: Language, opts?: Intl.DateTimeFormatOptions): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  try {
+    return new Intl.DateTimeFormat(language === "fa" ? "fa-IR" : "en-US", {
+      timeZone: "UTC",
+      weekday: opts?.weekday,
+      year: opts?.year ?? "numeric",
+      month: opts?.month ?? "short",
+      day: opts?.day ?? "numeric",
+      numberingSystem: language === "fa" ? "arabext" : "latn",
+    }).format(dt);
+  } catch {
+    return date;
+  }
+}
+
+/** Localized wall-clock time for a local "YYYY-MM-DDTHH:mm" string. */
+export function formatLocalTime(local: string, language: Language): string {
+  const hhmm = local.slice(11, 16);
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${digits(h, language)}:${digits(m, language)}`;
+}
+
+/** Localized range like "9:00 – 11:30" from ISO UTC instants in a timezone. */
+export function formatUtcRange(
+  startIso: string | null,
+  endIso: string | null,
+  timezone: string,
+  language: Language,
+): string {
+  if (!startIso || !endIso) return "";
+  const fmt = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat(language === "fa" ? "fa-IR" : "en-US", {
+        timeZone: timezone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        numberingSystem: language === "fa" ? "arabext" : "latn",
+      }).format(new Date(iso));
+    } catch {
+      return "";
+    }
+  };
+  return `${fmt(startIso)} – ${fmt(endIso)}`;
+}
+
+/** Greeting key by local hour in the user timezone. */
+export function greetingByHour(hour: number): "morning" | "afternoon" | "evening" {
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+}
+
+export function localHourIn(timezone: string): number {
+  try {
+    return Number(
+      new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" })
+        .format(new Date()),
+    );
+  } catch {
+    return new Date().getHours();
+  }
+}
+
+/** Today's local YYYY-MM-DD in a timezone. */
+export function todayIn(timezone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+    return parts;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/** Convert local wall-clock "YYYY-MM-DDTHH:mm" to a UTC ISO string. */
+export function zonedTimeToUtcIso(local: string, timezone: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m;
+  const naive = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi));
+  const offset = (date: Date): number => {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    const parts: Record<string, number> = {};
+    for (const p of dtf.formatToParts(date)) {
+      if (p.type !== "literal") parts[p.type] = Number(p.value);
+    }
+    return (
+      Date.UTC(parts.year ?? 1970, (parts.month ?? 1) - 1, parts.day ?? 1, parts.hour ?? 0, parts.minute ?? 0, parts.second ?? 0) -
+      date.getTime()
+    );
+  };
+  let ts = naive - offset(new Date(naive));
+  ts = naive - offset(new Date(ts));
+  return new Date(ts).toISOString();
+}
+
+/** Convert a UTC ISO instant to local wall-clock "YYYY-MM-DDTHH:mm" in tz. */
+export function utcToZonedLocalInput(iso: string, timezone: string): string {
+  try {
+    const d = new Date(iso);
+    const parts: Record<string, string> = {};
+    for (const p of new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(d)) {
+      if (p.type !== "literal") parts[p.type] = p.value;
+    }
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  } catch {
+    return iso.slice(0, 16);
+  }
+}

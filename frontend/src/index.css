@@ -1,0 +1,146 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/vazirmatn";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — the single source of truth for the visual system.   */
+/* ------------------------------------------------------------------ */
+
+:root {
+  /* Surfaces */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f2f5;
+  --border: #e4e5e9;
+  --border-strong: #d2d3d8;
+
+  /* Text */
+  --text: #1b1c20;
+  --text-muted: #6f7280;
+  --text-faint: #9a9ca7;
+
+  /* Accent — one blue, used only for meaning and action */
+  --accent: #2563eb;
+  --accent-hover: #1d4fd8;
+  --accent-soft: #e8effd;
+  --accent-text: #ffffff;
+
+  /* Semantic */
+  --danger: #dc2626;
+  --danger-soft: #fdeaea;
+  --warning: #b45309;
+  --warning-soft: #fdf3e3;
+  --success: #047857;
+  --success-soft: #e3f4ec;
+
+  /* Geometry */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+}
+
+.dark {
+  --bg: #101216;
+  --surface: #17191e;
+  --surface-2: #1f2228;
+  --border: #2a2d35;
+  --border-strong: #3a3e48;
+
+  --text: #ececf0;
+  --text-muted: #9a9da8;
+  --text-faint: #6d707b;
+
+  --accent: #4d8bf5;
+  --accent-hover: #6699f7;
+  --accent-soft: #1d2a44;
+  --accent-text: #ffffff;
+
+  --danger: #f05252;
+  --danger-soft: #3a2020;
+  --warning: #d9a04a;
+  --warning-soft: #33291a;
+  --success: #34b387;
+  --success-soft: #1b3328;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+
+  --radius-base: var(--radius);
+  --radius-sm2: var(--radius-sm);
+  --radius-lg2: var(--radius-lg);
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+  font-family: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html[lang="fa"] body {
+  font-family: "Vazirmatn Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Persian typography reads better slightly larger */
+html[lang="fa"] body {
+  line-height: 1.7;
+}
+
+.tabular,
+.mono-digits {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Restrained motion; respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

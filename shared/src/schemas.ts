@@ -47,7 +47,7 @@ const descriptionSchema = z
   .string()
   .trim()
   .max(ACTIVITY_DESCRIPTION_MAX_LENGTH)
-  .optional();
+  .nullish();
 
 const timezoneSchema = z.string().min(1).max(64);
 
