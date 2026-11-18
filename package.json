@@ -1,0 +1,47 @@
+{
+  "name": "ryty",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RyTy — minimal team activity and time-tracking (English / Persian, RTL)",
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:node": "tsx --env-file-if-exists=.env backend/src/runtime/node.ts",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "node scripts/build-server.mjs",
+    "start": "node --env-file-if-exists=.env dist/server/server.mjs",
+    "preview": "npm run build && npm run start",
+    "typecheck": "tsc -p frontend/tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit && tsc -p backend/tsconfig.node.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate:d1:local": "wrangler d1 migrations apply ryty --local",
+    "db:migrate:d1:remote": "wrangler d1 migrations apply ryty --remote",
+    "deploy": "npm run build:client && wrangler deploy",
+    "deploy:cf-only": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.70.0",
+    "@cloudflare/workers-types": "^5.20261118.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^22.19.0",
+    "@vitejs/plugin-react": "^5.1.4",
+    "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1",
+    "wrangler": "^4.165.0"
+  }
+}
