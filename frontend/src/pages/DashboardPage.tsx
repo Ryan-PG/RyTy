@@ -5,11 +5,14 @@ import { Pause, Play, Plus, Square } from "lucide-react";
 import type { Activity } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
+import { useProjects } from "../stores/ProjectsContext";
 import { useTimer } from "../stores/TimerContext";
 import { useToast } from "../stores/ToastContext";
 import { Badge, Button, Card, EmptyState, Input, Spinner, Textarea } from "../components/ui";
 import { ActivityFormModal } from "../components/ActivityFormModal";
 import { ActivityRow } from "../components/ActivityRow";
+import { ProjectPicker } from "../components/ProjectPicker";
+import { TagInput } from "../components/TagInput";
 import { formatDuration, formatDurationCompact, greetingByHour, localHourIn } from "../utils/format";
 
 /**
@@ -19,12 +22,15 @@ import { formatDuration, formatDurationCompact, greetingByHour, localHourIn } fr
 export function DashboardPage() {
   const { t } = useTranslation();
   const { user, language } = useAuth();
+  const { defaultProject } = useProjects();
   const { active, elapsed, loading, start, pause, resume, stop } = useTimer();
   const { toast } = useToast();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [showDescription, setShowDescription] = useState(false);
+  const [projectId, setProjectId] = useState<number | null | undefined>(undefined);
+  const [tags, setTags] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
 
@@ -61,9 +67,11 @@ export function DashboardPage() {
     if (!title.trim()) return;
     setStarting(true);
     try {
-      await start(title.trim(), description.trim() || undefined);
+      const effectiveProjectId = projectId === undefined ? (defaultProject?.id ?? null) : projectId;
+      await start(title.trim(), description.trim() || undefined, effectiveProjectId, tags);
       setTitle("");
       setDescription("");
+      setTags([]);
       setShowDescription(false);
     } catch {
       toast(t("common.errorGeneric"), "error");
@@ -169,7 +177,7 @@ export function DashboardPage() {
                 {t("dashboard.startTimer")}
               </Button>
             </div>
-            {showDescription ? (
+            {showDescription && (
               <Textarea
                 className="mt-2"
                 value={description}
@@ -177,15 +185,31 @@ export function DashboardPage() {
                 placeholder={t("dashboard.descriptionPlaceholder")}
                 onChange={(e) => setDescription(e.target.value)}
               />
-            ) : (
-              <button
-                type="button"
-                className="mt-2 text-xs text-muted hover:text-text"
-                onClick={() => setShowDescription(true)}
-              >
-                {t("dashboard.addDescription")}
-              </button>
             )}
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <ProjectPicker
+                value={projectId === undefined ? (defaultProject?.id ?? null) : projectId}
+                onChange={(id) => setProjectId(id)}
+                ariaLabel={t("projects.title")}
+              />
+              <div className="min-w-48 flex-1">
+                <TagInput
+                  value={tags}
+                  onChange={setTags}
+                  placeholder={t("tags.placeholderShort")}
+                  ariaLabel={t("tags.title")}
+                />
+              </div>
+              {!showDescription && (
+                <button
+                  type="button"
+                  className="text-xs text-muted hover:text-text"
+                  onClick={() => setShowDescription(true)}
+                >
+                  {t("dashboard.addDescription")}
+                </button>
+              )}
+            </div>
           </form>
         </Card>
       )}

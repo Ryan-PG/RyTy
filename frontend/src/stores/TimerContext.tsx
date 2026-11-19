@@ -9,7 +9,12 @@ interface TimerContextValue {
   elapsed: number;
   loading: boolean;
   refresh: () => Promise<void>;
-  start: (title: string, description?: string) => Promise<void>;
+  start: (
+    title: string,
+    description?: string,
+    projectId?: number | null,
+    tags?: string[],
+  ) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   stop: (overrides?: { title?: string; description?: string | null }) => Promise<EntryType>;
@@ -60,8 +65,13 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   }, [active]);
 
   const start = useCallback(
-    async (title: string, description?: string) => {
-      syncAnchor(await api.startTimer(title, description));
+    async (
+      title: string,
+      description?: string,
+      projectId?: number | null,
+      tags?: string[],
+    ) => {
+      syncAnchor(await api.startTimer(title, description, projectId, tags));
     },
     [syncAnchor],
   );

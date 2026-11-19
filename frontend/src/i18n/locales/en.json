@@ -29,7 +29,55 @@
     "addManually": "Add manually",
     "loadMore": "Load more",
     "minutesShort": "m",
-    "hoursShort": "h"
+    "hoursShort": "h",
+    "allProjects": "All projects"
+  },
+  "projects": {
+    "title": "Project",
+    "noProject": "No project",
+    "defaultBadge": "Default",
+    "setDefault": "Set as my default project",
+    "new": "New project",
+    "empty": "No projects yet — create the first one.",
+    "createTitle": "New project",
+    "name": "Project name",
+    "namePlaceholder": "e.g. Website Redesign",
+    "description": "Description",
+    "nameTaken": "A project with this name already exists.",
+    "visibilityLabel": "Visibility",
+    "visibilityPublic": "Public",
+    "visibilityPrivate": "Private",
+    "suggestToAdmin": "Suggest to admin",
+    "publicHint": "Public projects can be selected and set as default by everyone in the team.",
+    "privateHint": "Private projects are visible only to you (and administrators).",
+    "suggestHint": "Your suggestion goes to the admin for review; you can keep using it meanwhile. Once approved it becomes public.",
+    "statusBadge": {
+      "active": "Active",
+      "suggested": "Pending review"
+    },
+    "suggestedNotice": "This project is waiting for admin approval before it becomes public.",
+    "admin": {
+      "tab": "Projects",
+      "createTitle": "Create project",
+      "editTitle": "Edit project",
+      "approve": "Make public",
+      "reject": "Keep private",
+      "empty": "No projects defined yet.",
+      "created": "Project created.",
+      "updated": "Project updated.",
+      "deleted": "Project deleted.",
+      "approved": "Project is now public.",
+      "rejected": "Project kept private for its creator.",
+      "createdBy": "Created by",
+      "visibility": "Visibility",
+      "deleteTitle": "Delete project",
+      "deleteMessage": "Delete \"{{name}}\"? Activities assigned to it will remain, just without a project."
+    }
+  },
+  "tags": {
+    "title": "Tags",
+    "placeholder": "Type a tag, then press , to add",
+    "placeholderShort": "Add tags — comma to add"
   },
   "nav": {
     "dashboard": "Home",
@@ -143,6 +191,8 @@
     "activityCount": "Activities",
     "perDay": "Per day",
     "perUser": "Per user",
+    "perProject": "Per project",
+    "noProject": "No project",
     "perTitle": "By activity",
     "byDay": "Day",
     "byUser": "User",

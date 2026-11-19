@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Pencil, UserPlus } from "lucide-react";
-import type { AppSettings, User } from "@ryty/shared";
+import { KeyRound, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
+import type { AppSettings, Project, User } from "@ryty/shared";
 import { COMMON_TIMEZONES, LANGUAGES } from "@ryty/shared";
 import { api, ApiError } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
+import { useProjects } from "../stores/ProjectsContext";
 import { useToast } from "../stores/ToastContext";
 import {
   Badge,
@@ -17,31 +18,364 @@ import {
   Segmented,
   Select,
   Spinner,
+  Textarea,
 } from "../components/ui";
 import { formatLocalDate } from "../utils/format";
 
-/** Administration: user management and application settings. */
+/** Administration: users, projects and application settings. */
 export function AdminPage() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"users" | "settings">("users");
+  const [tab, setTab] = useState<"users" | "projects" | "settings">("users");
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold">{t("admin.title")}</h1>
-        <Segmented<"users" | "settings">
+        <Segmented<"users" | "projects" | "settings">
           ariaLabel={t("admin.title")}
           value={tab}
           onChange={setTab}
           options={[
             { value: "users", label: t("admin.usersTab") },
+            { value: "projects", label: t("projects.admin.tab") },
             { value: "settings", label: t("admin.settingsTab") },
           ]}
         />
       </div>
-      {tab === "users" ? <UsersTab /> : <SettingsTab />}
+      {tab === "users" ? <UsersTab /> : tab === "projects" ? <ProjectsTab /> : <SettingsTab />}
     </div>
   );
 }
+
+/* ----------------------------- Projects ----------------------------- */
+
+function ProjectsTab() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const { projects, loading, create, update, remove, approve, reject, refresh } = useProjects();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState<Project | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const act = async (id: number, action: () => Promise<unknown>, message: string) => {
+    setBusyId(id);
+    try {
+      await action();
+      toast(message);
+    } catch {
+      toast(t("common.errorGeneric"), "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const suggested = projects.filter((p) => p.status === "suggested");
+  const active = projects.filter((p) => p.status === "active");
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="size-4" aria-hidden />
+          {t("common.create")}
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Spinner className="size-5 text-muted" />
+        </div>
+      ) : (
+        <>
+          {suggested.length > 0 && (
+            <Card className="overflow-hidden">
+              <h2 className="border-b border-border px-3.5 py-2.5 text-sm font-semibold text-warning">
+                {t("projects.statusBadge.suggested")} ({suggested.length})
+              </h2>
+              <ul className="divide-y divide-border">
+                {suggested.map((p) => (
+                  <li key={p.id} className="flex flex-wrap items-center gap-2 px-3.5 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{p.name}</p>
+                      <p className="text-xs text-muted">
+                        {t("projects.admin.createdBy")}:{" "}
+                        <span dir="ltr">{p.creatorUsername ?? `#${p.createdBy}`}</span>
+                      </p>
+                    </div>
+                    <Button
+                      variant="primary"
+                      loading={busyId === p.id}
+                      onClick={() => void act(p.id, () => approve(p.id), t("projects.admin.approved"))}
+                    >
+                      {t("projects.admin.approve")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      loading={busyId === p.id}
+                      onClick={() => void act(p.id, () => reject(p.id), t("projects.admin.rejected"))}
+                    >
+                      {t("projects.admin.reject")}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <Card className="overflow-hidden">
+            {active.length === 0 ? (
+              <p className="px-3.5 py-6 text-center text-sm text-muted">{t("projects.admin.empty")}</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs text-faint">
+                    <th className="px-3.5 py-2 text-start font-medium">{t("projects.name")}</th>
+                    <th className="px-3.5 py-2 text-start font-medium">{t("projects.admin.visibility")}</th>
+                    <th className="hidden px-3.5 py-2 text-start font-medium sm:table-cell">{t("projects.admin.createdBy")}</th>
+                    <th className="px-3.5 py-2 text-end font-medium">{t("common.actions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {active.map((p) => (
+                    <tr key={p.id} className="border-b border-border last:border-0">
+                      <td className="px-3.5 py-2.5 font-medium">{p.name}</td>
+                      <td className="px-3.5 py-2.5">
+                        <Badge tone={p.visibility === "public" ? "accent" : "neutral"}>
+                          {p.visibility === "public"
+                            ? t("projects.visibilityPublic")
+                            : t("projects.visibilityPrivate")}
+                        </Badge>
+                      </td>
+                      <td className="hidden px-3.5 py-2.5 text-muted sm:table-cell" dir="ltr">
+                        {p.creatorUsername ?? `#${p.createdBy}`}
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            aria-label={t("common.edit")}
+                            className="rounded-[var(--radius-sm)] p-1.5 text-muted hover:bg-surface-2 hover:text-text"
+                            onClick={() => setEditing(p)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={t("common.delete")}
+                            className="rounded-[var(--radius-sm)] p-1.5 text-muted hover:bg-surface-2 hover:text-danger"
+                            onClick={() => setDeleting(p)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </>
+      )}
+
+      <CreateProjectAdminModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={refresh}
+        create={create}
+      />
+
+      {editing && (
+        <EditProjectModal
+          project={editing}
+          onClose={() => setEditing(null)}
+          onSaved={refresh}
+          update={update}
+        />
+      )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={t("projects.admin.deleteTitle")}
+        message={t("projects.admin.deleteMessage", { name: deleting?.name ?? "" })}
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        loading={busyId === deleting?.id}
+        onConfirm={() => {
+          if (!deleting) return;
+          void act(deleting.id, () => remove(deleting.id), t("projects.admin.deleted")).then(
+            () => setDeleting(null),
+          );
+        }}
+        onCancel={() => setDeleting(null)}
+      />
+    </div>
+  );
+}
+
+function CreateProjectAdminModal({
+  open,
+  onClose,
+  onCreated,
+  create,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+  create: ProjectsContextCreate;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+      setVisibility("public");
+      setError(null);
+    }
+  }, [open]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await create({
+        name: name.trim(),
+        description: description.trim() || null,
+        visibility,
+      });
+      toast(t("projects.admin.created"));
+      onClose();
+      await onCreated();
+    } catch (err: any) {
+      setError(err?.code === "project_name_taken" ? t("projects.nameTaken") : t("common.errorGeneric"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={t("projects.admin.createTitle")}>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <Field label={t("projects.name")} htmlFor="ap-name">
+          <Input id="ap-name" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label={`${t("projects.description")} — ${t("common.optional")}`} htmlFor="ap-desc">
+          <Textarea id="ap-desc" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <Field label={t("projects.admin.visibility")}>
+          <Select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as "public" | "private")}
+          >
+            <option value="public">{t("projects.visibilityPublic")}</option>
+            <option value="private">{t("projects.visibilityPrivate")}</option>
+          </Select>
+        </Field>
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" loading={saving}>
+            {t("common.create")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditProjectModal({
+  project,
+  onClose,
+  onSaved,
+  update,
+}: {
+  project: Project;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  update: ProjectsContextUpdate;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description ?? "");
+  const [visibility, setVisibility] = useState<"public" | "private">(project.visibility);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await update(project.id, {
+        name: name.trim(),
+        description: description.trim() || null,
+        visibility,
+      });
+      toast(t("projects.admin.updated"));
+      onClose();
+      await onSaved();
+    } catch (err: any) {
+      setError(err?.code === "project_name_taken" ? t("projects.nameTaken") : t("common.errorGeneric"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={t("projects.admin.editTitle")}>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <Field label={t("projects.name")} htmlFor="ep-name">
+          <Input id="ep-name" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label={`${t("projects.description")} — ${t("common.optional")}`} htmlFor="ep-desc">
+          <Textarea id="ep-desc" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <Field label={t("projects.admin.visibility")} hint={t("projects.publicHint")}>
+          <Select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as "public" | "private")}
+          >
+            <option value="public">{t("projects.visibilityPublic")}</option>
+            <option value="private">{t("projects.visibilityPrivate")}</option>
+          </Select>
+        </Field>
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" loading={saving}>
+            {t("common.save")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+type ProjectsContextCreate = (payload: {
+  name: string;
+  description?: string | null;
+  visibility?: "public" | "private";
+  suggest?: boolean;
+}) => Promise<Project>;
+
+type ProjectsContextUpdate = (
+  id: number,
+  payload: { name?: string; description?: string | null; visibility?: "public" | "private" },
+) => Promise<Project>;
 
 /* ------------------------------ Users ------------------------------- */
 

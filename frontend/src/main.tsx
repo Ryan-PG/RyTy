@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import "./index.css";
 import { AuthProvider, useAuth } from "./stores/AuthContext";
 import { TimerProvider } from "./stores/TimerContext";
+import { ProjectsProvider } from "./stores/ProjectsContext";
 import { ToastProvider } from "./stores/ToastContext";
 import { initI18n } from "./i18n";
 import { AppShell } from "./components/AppShell";
@@ -64,22 +65,24 @@ function PublicRoutes() {
 function AppRoutesShell() {
   const { user } = useAuth();
   return (
-    <TimerProvider>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/activities" element={<ActivitiesPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route
-            path="/admin"
-            element={user?.role === "admin" ? <AdminPage /> : <Navigate to="/" replace />}
-          />
-          <Route path="/account" element={<AccountPage />} />
-          <Route path="/change-password" element={<ChangePasswordPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </TimerProvider>
+    <ProjectsProvider>
+      <TimerProvider>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/activities" element={<ActivitiesPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route
+              path="/admin"
+              element={user?.role === "admin" ? <AdminPage /> : <Navigate to="/" replace />}
+            />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </TimerProvider>
+    </ProjectsProvider>
   );
 }
 

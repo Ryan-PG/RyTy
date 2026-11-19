@@ -5,8 +5,10 @@ import type {
   AuthUser,
   CreateActivityInput,
   Paginated,
+  Project,
   ReportSummary,
   SetupStatus,
+  Tag,
   UpdateActivityInput,
   User,
   ActivityListQuery,
@@ -80,8 +82,42 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) =>
     request<AuthUser>("/api/auth/change-password", jsonBody({ currentPassword, newPassword })),
 
-  updatePreferences: (payload: { language?: string; theme?: string; timezone?: string }) =>
+  updatePreferences: (payload: {
+    language?: string;
+    theme?: string;
+    timezone?: string;
+    defaultProjectId?: number | null;
+  }) =>
     request<AuthUser>("/api/auth/preferences", { method: "PATCH", body: JSON.stringify(payload) }),
+
+  /* ----------------------------- projects ---------------------------- */
+  listProjects: () => request<Project[]>("/api/projects"),
+
+  createProject: (payload: {
+    name: string;
+    description?: string | null;
+    visibility?: "public" | "private";
+    suggest?: boolean;
+  }) => request<Project>("/api/projects", jsonBody(payload)),
+
+  updateProject: (
+    id: number,
+    payload: { name?: string; description?: string | null; visibility?: "public" | "private" },
+  ) => request<Project>(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  deleteProject: (id: number) =>
+    request<{ ok: boolean }>(`/api/projects/${id}`, { method: "DELETE" }),
+
+  approveProject: (id: number) =>
+    request<Project>(`/api/projects/${id}/approve`, { method: "POST", body: "{}" }),
+
+  rejectProject: (id: number) =>
+    request<Project>(`/api/projects/${id}/reject`, { method: "POST", body: "{}" }),
+
+  /* ------------------------------- tags ------------------------------ */
+  listTags: (q?: string) => request<Tag[]>(`/api/tags${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+
+  createTag: (name: string) => request<Tag>("/api/tags", jsonBody({ name })),
 
   /* ---------------------------- activities --------------------------- */
   listActivities: (query: Partial<ActivityListQuery> & { page?: number; pageSize?: number }) => {
@@ -91,6 +127,8 @@ export const api = {
     if (query.q) params.set("q", query.q);
     if (query.from) params.set("from", query.from);
     if (query.to) params.set("to", query.to);
+    if (query.projectId) params.set("projectId", String(query.projectId));
+    if (query.tag) params.set("tag", query.tag);
     if (query.userId) params.set("userId", String(query.userId));
     const qs = params.toString();
     return request<Paginated<Activity>>(`/api/activities${qs ? `?${qs}` : ""}`);
@@ -106,8 +144,16 @@ export const api = {
     request<{ ok: boolean }>(`/api/activities/${id}`, { method: "DELETE" }),
 
   /* ------------------------------- timer ----------------------------- */
-  startTimer: (title: string, description?: string) =>
-    request<ActiveTimer & { elapsedSeconds: number }>("/api/timer/start", jsonBody({ title, description })),
+  startTimer: (
+    title: string,
+    description?: string,
+    projectId?: number | null,
+    tags?: string[],
+  ) =>
+    request<ActiveTimer & { elapsedSeconds: number }>(
+      "/api/timer/start",
+      jsonBody({ title, description, projectId: projectId ?? null, tags }),
+    ),
 
   pauseTimer: () =>
     request<ActiveTimer & { elapsedSeconds: number }>("/api/timer/pause", { method: "POST", body: "{}" }),

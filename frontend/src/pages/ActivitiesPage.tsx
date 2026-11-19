@@ -4,8 +4,9 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { Activity } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
+import { useProjects } from "../stores/ProjectsContext";
 import { useToast } from "../stores/ToastContext";
-import { Button, Card, ConfirmDialog, EmptyState, Input, Spinner } from "../components/ui";
+import { Button, Card, ConfirmDialog, EmptyState, Input, Select, Spinner } from "../components/ui";
 import { ActivityFormModal } from "../components/ActivityFormModal";
 import { ActivityRow } from "../components/ActivityRow";
 import { formatDurationCompact, formatLocalDate, todayIn } from "../utils/format";
@@ -19,12 +20,14 @@ const PAGE_SIZE = 25;
 export function ActivitiesPage() {
   const { t } = useTranslation();
   const { user, language } = useAuth();
+  const { usable } = useProjects();
   const { toast } = useToast();
   const timezone = user?.timezone ?? "UTC";
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -34,7 +37,10 @@ export function ActivitiesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
 
-  const filtersKey = useMemo(() => `${search}|${from}|${to}`, [search, from, to]);
+  const filtersKey = useMemo(
+    () => `${search}|${from}|${to}|${projectFilter}`,
+    [search, from, to, projectFilter],
+  );
 
   const load = useCallback(
     async (targetPage: number, append: boolean) => {
@@ -46,6 +52,7 @@ export function ActivitiesPage() {
           q: search.trim() || undefined,
           from: from || undefined,
           to: to || undefined,
+          projectId: projectFilter ? Number(projectFilter) : undefined,
         });
         setActivities((prev) => (append ? [...prev, ...result.data] : result.data));
         setTotal(result.total);
@@ -119,6 +126,19 @@ export function ActivitiesPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <Select
+          aria-label={t("reports.userFilter")}
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value)}
+          className="sm:w-44"
+        >
+          <option value="">{t("common.allProjects")}</option>
+          {usable.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
         <div className="flex gap-2">
           <Input
             type="date"

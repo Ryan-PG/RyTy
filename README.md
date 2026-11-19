@@ -29,7 +29,9 @@ RyTy is a lightweight tool for teams to record **what** they worked on, **how lo
 
 - ⏱️ **Timer tracking** — start / pause / resume / stop; timekeeping is computed **server-side** and survives refreshes and closed tabs
 - ✍️ **Manual entry** — time range (with overlap detection) or duration-only
-- 📊 **Reports** — daily / weekly / monthly / custom, grouped by day, user and activity, with **CSV export** (UTF-8, Persian-safe)
+- 📁 **Projects** — admins define public (team-wide) or private projects; users can create their own or suggest one to the admin for public review; everyone can pick a **default project**
+- 🏷️ **Tags** — public tags anyone can create; type a tag and press `,` to attach it, with instant autocomplete
+- 📊 **Reports** — daily / weekly / monthly / custom, grouped by day, user, project and activity, with **CSV export** (UTF-8, Persian-safe)
 - 👥 **Two roles** — Admin (user management, app settings) and User; no public registration
 - 🔒 **Secure by design** — session cookies (hashed tokens, HttpOnly), PBKDF2 password hashing, login rate limiting, CSRF protection, mandatory first-login password change, secret-based admin bootstrap
 - 🌍 **English + Persian (فارسی)** — full RTL/LTR layouts, Persian digits & dates, Vazirmatn typography
@@ -51,9 +53,9 @@ RyTy is a lightweight tool for teams to record **what** they worked on, **how lo
 | --- | --- |
 | ![Dashboard desktop](docs/screenshots/dashboard-desktop-light.png) | ![Reports desktop](docs/screenshots/reports-desktop-light.png) |
 
-| Reports (mobile) | Administration |
+| Reports (mobile) | Administration — projects |
 | --- | --- |
-| ![Reports mobile](docs/screenshots/reports-mobile-dark.png) | ![Admin](docs/screenshots/admin-desktop-light.png) |
+| ![Reports mobile](docs/screenshots/reports-mobile-dark.png) | ![Admin projects](docs/screenshots/admin-projects-desktop-dark.png) |
 
 ## 🏗️ Architecture
 
@@ -188,7 +190,9 @@ MIT
 
 - ⏱️ **زمان‌سنج** — شروع / توقف / ادامه / پایان؛ محاسبهٔ زمان **سمت سرور** است و با رفرش یا بستن مرورگر از بین نمی‌رود
 - ✍️ **ثبت دستی** — بازهٔ زمانی (با تشخیص هم‌پوشانی) یا فقط مدت
-- 📊 **گزارش‌ها** — روزانه / هفتگی / ماهانه / دلخواه، به تفکیک روز، کاربر و فعالیت، همراه با **خروجی CSV** (UTF-8 و سازگار با فارسی)
+- 📁 **پروژه‌ها** — مدیر پروژه‌های عمومی (برای همهٔ تیم) یا خصوصی تعریف می‌کند؛ کاربران می‌توانند پروژه خودشان را بسازند یا به مدیر پیشنهاد دهند؛ هر کس می‌تواند **پروژه پیش‌فرض** خود را انتخاب کند
+- 🏷️ **برچسب‌ها** — برچسب‌های عمومی که همه می‌سازند؛ کافی است نام برچسب را بنویسید و با `,` آن را اضافه کنید (با پیشنهاد لحظه‌ای)
+- 📊 **گزارش‌ها** — روزانه / هفتگی / ماهانه / دلخواه، به تفکیک روز، کاربر، پروژه و فعالیت، همراه با **خروجی CSV** (UTF-8 و سازگار با فارسی)
 - 👥 **دو نقش** — مدیر (مدیریت کاربران و تنظیمات) و کاربر؛ بدون ثبت‌نام عمومی
 - 🔒 **امنیت** — کوکی نشست با توکن هش‌شده، هش گذرواژه با PBKDF2، محدودسازی تلاش ورود، محافظت CSRF، تغییر اجباری گذرواژه در اولین ورود، راه‌اندازی مدیر از طریق رمز محیطی
 - 🌍 **انگلیسی + فارسی** — چیدمان کامل راست‌به‌چپ/چپ‌به‌راست، ارقام و تاریخ فارسی، قلم وزیرمتن

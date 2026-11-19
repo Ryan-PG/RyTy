@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { LogOut } from "lucide-react";
 import { COMMON_TIMEZONES, LANGUAGES, THEMES, type Language, type Theme } from "@ryty/shared";
 import { useAuth } from "../stores/AuthContext";
+import { useProjects } from "../stores/ProjectsContext";
 import { useToast } from "../stores/ToastContext";
 import { Button, Card, Field, Select } from "../components/ui";
 import { ChangePasswordPage } from "./ChangePasswordPage";
@@ -12,13 +13,19 @@ import { ChangePasswordPage } from "./ChangePasswordPage";
 export function AccountPage() {
   const { t } = useTranslation();
   const { user, updatePreferences, logout } = useAuth();
+  const { usable, defaultProject, setDefaultProject } = useProjects();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
 
   if (!user) return null;
 
-  const onPreferenceChange = async (payload: { language?: Language; theme?: Theme; timezone?: string }) => {
+  const onPreferenceChange = async (payload: {
+    language?: Language;
+    theme?: Theme;
+    timezone?: string;
+    defaultProjectId?: number | null;
+  }) => {
     setSaving(true);
     try {
       await updatePreferences(payload);
@@ -85,7 +92,11 @@ export function AccountPage() {
             ))}
           </Select>
         </Field>
-        <Field label={t("account.timezone")} hint={t("account.timezoneHint")} htmlFor="ac-tz">
+        <Field
+          label={t("account.timezone")}
+          hint={t("account.timezoneHint")}
+          htmlFor="ac-tz"
+        >
           <Select
             id="ac-tz"
             value={COMMON_TIMEZONES.includes(user.timezone as never) ? user.timezone : "custom"}
@@ -102,6 +113,24 @@ export function AccountPage() {
             {!COMMON_TIMEZONES.includes(user.timezone as never) && (
               <option value="custom">{user.timezone}</option>
             )}
+          </Select>
+        </Field>
+        <Field label={t("projects.title")} hint={t("projects.publicHint")} htmlFor="ac-project">
+          <Select
+            id="ac-project"
+            value={defaultProject?.id ?? ""}
+            disabled={saving}
+            onChange={(e) => {
+              void setDefaultProject(e.target.value ? Number(e.target.value) : null);
+              toast(t("account.saved"));
+            }}
+          >
+            <option value="">{t("projects.noProject")}</option>
+            {usable.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
           </Select>
         </Field>
       </Card>

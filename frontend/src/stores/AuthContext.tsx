@@ -13,7 +13,12 @@ interface AuthContextValue {
   refresh: () => Promise<void>;
   login: (username: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
-  updatePreferences: (payload: { language?: Language; theme?: Theme; timezone?: string }) => Promise<void>;
+  updatePreferences: (payload: {
+    language?: Language;
+    theme?: Theme;
+    timezone?: string;
+    defaultProjectId?: number | null;
+  }) => Promise<void>;
   setLanguage: (language: Language) => void;
   effectiveTheme: "light" | "dark";
 }
@@ -109,7 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updatePreferences = useCallback(
-    async (payload: { language?: Language; theme?: Theme; timezone?: string }) => {
+    async (payload: {
+      language?: Language;
+      theme?: Theme;
+      timezone?: string;
+      defaultProjectId?: number | null;
+    }) => {
       const me = await api.updatePreferences(payload);
       setUser(me);
       if (payload.language) applyUserLanguage(me.language);

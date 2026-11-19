@@ -41,14 +41,31 @@ Timestamps are stored in **UTC**. `occurred_on` is derived from a
 configurable application timezone. Changing the timezone never silently
 rewrites historical timestamps.
 
-### 2.3 Reports
+### 2.4 Projects & tags
+
+- **Projects** organize activities. Admins create projects and set them
+  **public** (selectable, and usable as a personal default, by everyone) or
+  **private** (visible only to the admin). Regular users can create
+  **private** projects for themselves or **suggest** a project to the admin;
+  suggested projects are pending review, remain usable by their creator, and
+  become public on approval (or revert to the creator's private project on
+  rejection). Every user can pick one accessible project as their **default
+  project** (pre-selected for new activities and the timer).
+- **Tags** are public: everyone can create them and attach them to
+  activities. The tag input adds a tag by typing a name and pressing `,`.
+  Unknown tags are created automatically; tag names are case-insensitive and
+  normalized (whitespace collapsed). Activities can be filtered by project
+  and by tag; CSV export includes the project and tags columns.
+
+### 2.5 Reports
 
 Daily / weekly / monthly summaries, custom date range, Admin user filter,
-total duration, activity count, grouping by user and by activity title, CSV
-export (UTF-8, BOM for Excel, proper escaping, Persian-safe, respects active
-filters). Reports respect the configured visibility mode (§4).
+total duration, activity count, grouping by user, by project and by activity
+title, CSV export (UTF-8, BOM for Excel, proper escaping, Persian-safe,
+respects active filters). Reports respect the configured visibility mode
+(§4).
 
-### 2.4 Administration
+### 2.6 Administration
 
 - **User management**: list, create, edit, enable/disable, secure password
   reset, role assignment. The system must never lose its last active
@@ -56,10 +73,10 @@ filters). Reports respect the configured visibility mode (§4).
 - **Application settings**: application name, default language, default
   timezone, report visibility (`private` | `all_users`).
 
-### 2.5 Account settings
+### 2.7 Account settings
 
 Change password, language preference, theme preference (light / dark /
-system), timezone preference, logout.
+system), timezone preference, default project, logout.
 
 ## 3. User Roles & Permissions
 
@@ -199,7 +216,13 @@ Five tables:
 - **settings** — key, value, updated_at
 - **timers** — one row per user's active timer: id, user_id (unique),
   state (`running` | `paused`), started_at (segment start),
-  accumulated_seconds, title, description, created_at, updated_at
+  accumulated_seconds, title, description, project_id, tags (JSON names),
+  created_at, updated_at
+- **projects** — id, name (unique, case-insensitive), description,
+  visibility (`public` | `private`), status (`active` | `suggested`),
+  created_by, created_at, updated_at
+- **tags** — id, name (unique, case-insensitive), created_by, created_at
+- **activity_tags** — activity_id + tag_id (composite PK)
 
 Indexes on: `activities(user_id, occurred_on)`, `activities(started_at)`,
 `activities(ended_at)`, `sessions(token_hash)`, `sessions(expires_at)`,
@@ -231,6 +254,11 @@ PATCH     /api/admin/users/:id
 POST      /api/admin/users/:id/reset-password
 GET|PATCH /api/admin/settings
 GET       /api/health
+
+GET|POST          /api/projects
+GET|PATCH|DELETE  /api/projects/:id
+POST /api/projects/:id/approve | /reject   (admin)
+GET|POST          /api/tags
 ```
 
 Consistent JSON envelope, Zod validation on every input, standard HTTP

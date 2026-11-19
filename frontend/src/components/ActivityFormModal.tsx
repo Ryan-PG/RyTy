@@ -3,8 +3,11 @@ import { useTranslation } from "react-i18next";
 import type { Activity, CreateActivityInput } from "@ryty/shared";
 import { api, ApiError } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
+import { useProjects } from "../stores/ProjectsContext";
 import { useToast } from "../stores/ToastContext";
 import { Button, Field, Input, Modal, Segmented, Textarea } from "./ui";
+import { ProjectPicker } from "./ProjectPicker";
+import { TagInput } from "./TagInput";
 import { todayIn, utcToZonedLocalInput, zonedTimeToUtcIso } from "../utils/format";
 
 type Mode = "range" | "duration";
@@ -47,6 +50,7 @@ function parseDurationInput(value: string): number | null {
 export function ActivityFormModal({ open, onClose, activity, initialMode = "range" }: Props) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { defaultProject } = useProjects();
   const { toast } = useToast();
 
   const isEdit = Boolean(activity);
@@ -57,6 +61,8 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
   const [end, setEnd] = useState(nowLocalInput());
   const [durationText, setDurationText] = useState("0:30");
   const [occurredOn, setOccurredOn] = useState(todayIn(user?.timezone ?? "UTC"));
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [overlapCount, setOverlapCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +74,8 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
     if (activity) {
       setTitle(activity.title);
       setDescription(activity.description ?? "");
+      setProjectId(activity.project?.id ?? null);
+      setTags(activity.tags);
       const timezone = user?.timezone ?? "UTC";
       if (activity.entryType === "duration") {
         setMode("duration");
@@ -88,8 +96,11 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
       setDurationText("0:30");
       setOccurredOn(todayIn(user?.timezone ?? "UTC"));
       setMode(initialMode);
+      // Default to the user's default project for frictionless entry.
+      setProjectId(defaultProject?.id ?? null);
+      setTags([]);
     }
-  }, [open, activity, initialMode, user?.timezone]);
+  }, [open, activity, initialMode, user?.timezone, defaultProject?.id]);
 
   const durationSeconds = useMemo(() => parseDurationInput(durationText), [durationText]);
 
@@ -124,6 +135,8 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
       const shared = {
         title: title.trim(),
         description: description.trim() || null,
+        projectId,
+        tags,
       };
       if (isEdit && activity) {
         await api.updateActivity(
@@ -143,6 +156,8 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
                 start,
                 end,
                 allowOverlap,
+                projectId,
+                tags,
               }
             : {
                 entryType: "duration",
@@ -150,6 +165,8 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
                 description: description.trim() || undefined,
                 durationSeconds: durationSeconds!,
                 occurredOn,
+                projectId,
+                tags,
               };
         await api.createActivity(payload);
         toast(t("dashboard.saved"));
@@ -211,6 +228,24 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
               onChange={(e) => setDescription(e.target.value)}
             />
           </Field>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label={t("projects.title")}>
+              <ProjectPicker
+                value={projectId}
+                onChange={setProjectId}
+                ariaLabel={t("projects.title")}
+              />
+            </Field>
+            <Field label={t("tags.title")} hint={t("tags.hint")}>
+              <TagInput
+                value={tags}
+                onChange={setTags}
+                placeholder={t("tags.placeholder")}
+                ariaLabel={t("tags.title")}
+              />
+            </Field>
+          </div>
 
           {mode === "range" ? (
             <div className="grid grid-cols-2 gap-3">

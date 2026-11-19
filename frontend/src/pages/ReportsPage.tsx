@@ -244,6 +244,35 @@ export function ReportsPage() {
             </Card>
           )}
 
+          {/* Per project (when visible) */}
+          {summary.byProject.length > 1 && (
+            <Card className="overflow-hidden">
+              <h2 className="border-b border-border px-3.5 py-2.5 text-sm font-semibold text-muted">{t("reports.perProject")}</h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs text-faint">
+                    <th className="px-3.5 py-1.5 text-start font-medium">{t("projects.title")}</th>
+                    <th className="px-3.5 py-1.5 text-end font-medium">{t("reports.count")}</th>
+                    <th className="px-3.5 py-1.5 text-end font-medium">{t("reports.totalTime")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.byProject.map((p) => (
+                    <tr key={p.projectId ?? "none"} className="border-b border-border last:border-0">
+                      <td className="px-3.5 py-2 font-medium">
+                        {p.projectName || t("reports.noProject")}
+                      </td>
+                      <td className="px-3.5 py-2 text-end text-muted tabular">{p.count}</td>
+                      <td className="px-3.5 py-2 text-end font-medium tabular" dir="ltr">
+                        {formatDurationCompact(p.totalSeconds, language)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+
           {/* Per title */}
           <Card className="overflow-hidden">
             <h2 className="border-b border-border px-3.5 py-2.5 text-sm font-semibold text-muted">{t("reports.perTitle")}</h2>
