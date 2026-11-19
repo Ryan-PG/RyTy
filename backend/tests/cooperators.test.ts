@@ -14,6 +14,7 @@ import type { Hono } from "hono";
 const BOOTSTRAP_PASSWORD = "bootstrap-test-password";
 
 let app: Hono;
+let db: import("@libsql/client").Client;
 let adminCookie = "";
 let saraCookie = "";
 
@@ -58,6 +59,7 @@ async function login(username: string, password: string): Promise<string> {
 
 beforeAll(async () => {
   const client = createClient({ url: ":memory:" });
+  db = client;
   const migrationsDir = await resolveMigrationsDir();
   if (!migrationsDir) throw new Error("migrations directory not found");
   await runMigrations(client, migrationsDir);
@@ -143,18 +145,36 @@ describe("co-doers", () => {
     expect(found.cooperators).toEqual([{ id: 2, username: "sara" }]);
   });
 
-  it("co-doer cannot edit or delete the activity", async () => {
+  it("co-doer can edit the activity", async () => {
+    const patch = await call(
+      "PATCH",
+      `/api/activities/${activityId}`,
+      { title: "Pair session (edited by co-doer)" },
+      saraCookie,
+    );
+    expect(patch.status).toBe(200);
+    expect(patch.json.data.title).toBe("Pair session (edited by co-doer)");
+    // Co-doer edits never reassign the owner or co-doer membership.
+    expect(patch.json.data.userId).toBe(1);
+    expect(patch.json.data.cooperators).toEqual([{ id: 2, username: "sara" }]);
+  });
+
+  it("outside users (non co-doers) cannot edit the activity", async () => {
+    await call(
+      "POST",
+      "/api/admin/users",
+      { username: "mike", password: "MikePass12345", role: "user" },
+      adminCookie,
+    );
+    const mike = await login("mike", "MikePass12345");
     const patch = await call(
       "PATCH",
       `/api/activities/${activityId}`,
       { title: "Hacked" },
-      saraCookie,
+      mike,
     );
     expect(patch.status).toBe(403);
     expect(patch.json.error.code).toBe("not_owner");
-
-    const del = await call("DELETE", `/api/activities/${activityId}`, undefined, saraCookie);
-    expect(del.status).toBe(403);
   });
 
   it("co-doer can view the single activity endpoint", async () => {
@@ -224,3 +244,82 @@ describe("co-doers", () => {
     expect(res.json.data.cooperators).toEqual([]);
   });
 });
+
+describe("soft delete", () => {
+  it("delete hides the activity from every endpoint but keeps the row", async () => {
+    const created = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "duration", title: "Doomed entry", durationSeconds: 600 },
+      adminCookie,
+    );
+    expect(created.status).toBe(201);
+    const id = created.json.data.id as number;
+
+    const del = await call("DELETE", `/api/activities/${id}`, undefined, adminCookie);
+    expect(del.status).toBe(200);
+
+    const gone = await call("GET", `/api/activities/${id}`, undefined, adminCookie);
+    expect(gone.status).toBe(404);
+
+    const list = await call("GET", "/api/activities?q=Doomed", undefined, adminCookie);
+    expect(list.json.data.total).toBe(0);
+
+    // The row physically remains, flagged soft-deleted (audit/recovery).
+    const row = await db.execute({
+      sql: "SELECT deleted_at, updated_at FROM activities WHERE id = ?",
+      args: [id],
+    });
+    expect(row.rows.length).toBe(1);
+    expect(row.rows[0].deleted_at).toBeTruthy();
+  });
+
+  it("a co-doer can delete the activity", async () => {
+    const created = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "duration", title: "Shared cleanup", durationSeconds: 300, cooperatorIds: [2] },
+      adminCookie,
+    );
+    const id = created.json.data.id as number;
+    const del = await call("DELETE", `/api/activities/${id}`, undefined, saraCookie);
+    expect(del.status).toBe(200);
+    expect((await call("GET", `/api/activities/${id}`, undefined, adminCookie)).status).toBe(404);
+  });
+
+  it("outside users cannot delete the activity", async () => {
+    const created = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "duration", title: "Protected", durationSeconds: 300 },
+      adminCookie,
+    );
+    const id = created.json.data.id as number;
+    const mike = await login("mike", "MikePass12345");
+    const del = await call("DELETE", `/api/activities/${id}`, undefined, mike);
+    expect(del.status).toBe(403);
+  });
+
+  it("soft-deleted activities no longer overlap new ranges", async () => {
+    // Overlap detection must ignore soft-deleted rows.
+    const start = "2026-05-10T09:00";
+    const end = "2026-05-10T11:00";
+    const first = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "range", title: "Old range", start, end },
+      adminCookie,
+    );
+    expect(first.status).toBe(201);
+    const id = first.json.data.id as number;
+    await call("DELETE", `/api/activities/${id}`, undefined, adminCookie);
+    const retry = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "range", title: "Replacement range", start, end },
+      adminCookie,
+    );
+    expect(retry.status).toBe(201);
+  });
+});
+

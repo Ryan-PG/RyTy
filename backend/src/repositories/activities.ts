@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { activities, projects, users } from "../database/schema";
 import type { AppDatabase } from "../database/adapter";
 import type { Activity, ActivityListQuery, EntryType } from "@ryty/shared";
@@ -61,7 +61,7 @@ export function createActivityRepository(db: AppDatabase) {
         .select({ activity: activities, projectName: projects.name })
         .from(activities)
         .leftJoin(projects, eq(projects.id, activities.projectId))
-        .where(eq(activities.id, id))
+        .where(and(eq(activities.id, id), isNull(activities.deletedAt)))
         .limit(1);
       return row ? toActivity(row.activity, undefined, row.projectName) : null;
     },
@@ -72,7 +72,7 @@ export function createActivityRepository(db: AppDatabase) {
         .from(activities)
         .leftJoin(users, eq(users.id, activities.userId))
         .leftJoin(projects, eq(projects.id, activities.projectId))
-        .where(eq(activities.id, id))
+        .where(and(eq(activities.id, id), isNull(activities.deletedAt)))
         .limit(1);
       return row ? toActivity(row.activity, row.username, row.projectName) : null;
     },
@@ -88,7 +88,7 @@ export function createActivityRepository(db: AppDatabase) {
     ): Promise<{ data: Activity[]; total: number }> {
       const page = query.page ?? 1;
       const pageSize = query.pageSize ?? 20;
-      const conditions = [];
+      const conditions = [isNull(activities.deletedAt)];
       if (userIds && userIds.length > 0) {
         conditions.push(
           sql`(${activities.userId} IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})
@@ -102,8 +102,13 @@ export function createActivityRepository(db: AppDatabase) {
         return { data: [], total: 0 };
       }
       if (query.q) {
-        const pattern = `%${query.q}%`;
-        const search = or(ilike(activities.title, pattern), ilike(activities.description, pattern));
+        // SQLite has no ILIKE; lower() both sides for a case-insensitive
+        // search that works on D1 and SQLite alike.
+        const pattern = `%${query.q.toLowerCase()}%`;
+        const search = or(
+          sql`lower(${activities.title}) LIKE ${pattern}`,
+          sql`lower(${activities.description}) LIKE ${pattern}`,
+        );
         if (search) conditions.push(search);
       }
       if (query.from) conditions.push(gte(activities.occurredOn, query.from));
@@ -119,7 +124,7 @@ export function createActivityRepository(db: AppDatabase) {
         );
       }
 
-      const where = conditions.length > 0 ? and(...conditions) : undefined;
+      const where = and(...conditions);
 
       const rows = await db
         .select({ activity: activities, username: users.username, projectName: projects.name })
@@ -151,6 +156,7 @@ export function createActivityRepository(db: AppDatabase) {
     ): Promise<Activity[]> {
       const conditions = [
         eq(activities.userId, userId),
+        isNull(activities.deletedAt),
         sql`${activities.startedAt} IS NOT NULL`,
         sql`${activities.startedAt} < ${endIso}`,
         sql`COALESCE(${activities.endedAt}, ${activities.startedAt}) > ${startIso}`,
@@ -173,7 +179,11 @@ export function createActivityRepository(db: AppDatabase) {
       from: string,
       to: string,
     ): Promise<Activity[]> {
-      const conditions = [gte(activities.occurredOn, from), lte(activities.occurredOn, to)];
+      const conditions = [
+        isNull(activities.deletedAt),
+        gte(activities.occurredOn, from),
+        lte(activities.occurredOn, to),
+      ];
       if (userIds && userIds.length > 0) {
         conditions.push(
           sql`${activities.userId} IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})`,
@@ -225,8 +235,12 @@ export function createActivityRepository(db: AppDatabase) {
       return row ? toActivity(row) : null;
     },
 
+    /** Soft delete: keep the row for audit/recovery, hide it from queries. */
     async delete(id: number): Promise<void> {
-      await db.delete(activities).where(eq(activities.id, id));
+      await db
+        .update(activities)
+        .set({ deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+        .where(eq(activities.id, id));
     },
   };
 }

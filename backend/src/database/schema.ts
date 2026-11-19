@@ -81,6 +81,8 @@ export const activities = sqliteTable("activities", {
   projectId: integer("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
+  /** Soft delete: set when the row is deleted; never surfaced again. */
+  deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (t) => [
@@ -88,6 +90,7 @@ export const activities = sqliteTable("activities", {
   index("idx_activities_started").on(t.startedAt),
   index("idx_activities_ended").on(t.endedAt),
   index("idx_activities_project").on(t.projectId),
+  index("idx_activities_deleted").on(t.deletedAt),
 ]);
 
 /** Many-to-many between activities and public tags. */

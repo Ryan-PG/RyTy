@@ -175,11 +175,14 @@ export function ActivitiesPage() {
                 </div>
                 <Card className="divide-y divide-border overflow-hidden">
                   {items.map((activity) => {
-                    const isOwner = activity.userId === user?.id;
+                    // The owner and any co-doer may edit or delete.
+                    const canEdit =
+                      activity.userId === user?.id ||
+                      activity.cooperators.some((c) => c.id === user?.id);
                     return (
                       <div key={activity.id} className="group relative">
                         <ActivityRow activity={activity} timezone={timezone} />
-                        {isOwner && (
+                        {canEdit && (
                           <div className="absolute inset-y-0 end-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
                             <button
                               type="button"

@@ -72,20 +72,6 @@ export async function getActivityForView(
   return { activity, isOwner: activity.userId === user.id };
 }
 
-/** Owner-only guard for mutations. */
-export async function getOwnedActivity(
-  services: Services,
-  user: AuthenticatedUser,
-  id: number,
-): Promise<Activity> {
-  const activity = await services.activities.findById(id);
-  if (!activity) throw notFound("activity_not_found", "Activity not found");
-  if (activity.userId !== user.id) {
-    throw forbidden("not_owner", "You can only access your own activities");
-  }
-  return activity;
-}
-
 /** Overlap check for a half-open [start, end) interval of one user. */
 export async function checkOverlap(
   services: Services,
@@ -186,7 +172,7 @@ export async function createActivity(
   return (await services.activities.findById(activity.id)) ?? activity;
 }
 
-/** Update an owned activity with validated client input. */
+/** Update an activity the viewer owns or is a co-doer of. */
 export async function updateActivity(
   services: Services,
   user: AuthenticatedUser,
@@ -194,7 +180,10 @@ export async function updateActivity(
   input: UpdateActivityInput,
   appTimezone: string,
 ): Promise<Activity> {
-  const existing = await getOwnedActivity(services, user, id);
+  // The owner and any co-doer may edit; overlap is checked against the
+  // owner's timeline, and co-doer membership is resolved for the owner.
+  const existing = (await getActivityForView(services, user, id)).activity;
+  const ownerId = existing.userId;
   const patch: Parameters<Services["activities"]["update"]>[1] = {};
 
   if (input.title !== undefined) patch.title = input.title;
@@ -230,7 +219,7 @@ export async function updateActivity(
     }
     const overlap = await checkOverlap(
       services,
-      user.id,
+      ownerId,
       startUtc.toISOString(),
       endUtc.toISOString(),
       id,
@@ -255,7 +244,7 @@ export async function updateActivity(
   if (input.cooperatorIds !== undefined) {
     await services.coops.setForActivity(
       id,
-      await resolveCooperators(services, user.id, input.cooperatorIds),
+      await resolveCooperators(services, ownerId, input.cooperatorIds),
     );
   }
   void existing;

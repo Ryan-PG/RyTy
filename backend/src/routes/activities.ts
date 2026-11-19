@@ -8,7 +8,6 @@ import { parseJson, parseQuery } from "../validators/validate";
 import {
   createActivity,
   getActivityForView,
-  getOwnedActivity,
   hydrateActivities,
   updateActivity,
 } from "../services/activity";
@@ -90,10 +89,13 @@ export function activityRoutes(): Hono {
     const id = Number(c.req.param("id"));
     const input = await parseJson(c, updateActivitySchema);
     const appSettings = await services.settings.getAppSettings();
+    // The owner and any co-doer may edit the activity.
+    const { activity } = await getActivityForView(services, user, id);
+    void activity;
     try {
-      const activity = await updateActivity(services, user, id, input, appSettings.defaultTimezone);
-      await hydrateActivities(services, [activity]);
-      return c.json({ data: activity });
+      const updated = await updateActivity(services, user, id, input, appSettings.defaultTimezone);
+      await hydrateActivities(services, [updated]);
+      return c.json({ data: updated });
     } catch (err) {
       if (err instanceof HttpError && err.code === "activity_overlap") {
         return c.json(
@@ -105,11 +107,13 @@ export function activityRoutes(): Hono {
     }
   });
 
+  // Soft delete: the row stays for audit, but disappears from every query.
+  // The owner and any co-doer may delete the activity.
   app.delete("/:id", async (c) => {
     const services = c.get("services");
     const user = c.get("user");
     const id = Number(c.req.param("id"));
-    await getOwnedActivity(services, user, id);
+    await getActivityForView(services, user, id);
     await services.activities.delete(id);
     return c.json({ data: { ok: true } });
   });
