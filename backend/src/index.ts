@@ -9,6 +9,7 @@ import { reportRoutes } from "./routes/reports";
 import { adminRoutes } from "./routes/admin";
 import { projectRoutes } from "./routes/projects";
 import { tagRoutes } from "./routes/tags";
+import { expenseRoutes } from "./routes/expenses";
 import { requireAuth, requireAdmin, blockUntilPasswordChanged } from "./middleware/auth";
 import { getSetupStatus } from "./services/auth";
 import { HttpError } from "./utils/http";
@@ -71,6 +72,7 @@ export function createApp(env: RuntimeEnv): Hono {
   protectedApi.route("/reports", reportRoutes());
   protectedApi.route("/projects", projectRoutes());
   protectedApi.route("/tags", tagRoutes());
+  protectedApi.route("/expenses", expenseRoutes());
 
   // User directory for co-doer selection (and report filters). It is a
   // team application: active usernames are visible to everyone signed in.

@@ -759,6 +759,16 @@ function SettingsTab() {
             )}
           </Select>
         </Field>
+        <Field label={t("admin.settings.currency")} hint={t("admin.settings.currencyHint")} htmlFor="st-currency">
+          <Input
+            id="st-currency"
+            value={settings.currency}
+            maxLength={20}
+            dir="ltr"
+            placeholder="TMN"
+            onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+          />
+        </Field>
       </Card>
 
       <Card className="flex flex-col gap-2 p-4">

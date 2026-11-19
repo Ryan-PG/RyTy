@@ -175,7 +175,10 @@
     "updated": "Activity updated.",
     "deleted": "Activity deleted.",
     "hours": "h",
-    "minutes": "m"
+    "minutes": "m",
+    "entryTabs": "Entry",
+    "taskTab": "Task",
+    "expenseTab": "Expense"
   },
   "activities": {
     "title": "Activities",
@@ -255,7 +258,9 @@
       "visibilityAllHint": "All signed-in users can see other users' activities and reports.",
       "saved": "Settings saved.",
       "languageEn": "English",
-      "languageFa": "Persian (فارسی)"
+      "languageFa": "Persian (فارسی)",
+      "currency": "Currency",
+      "currencyHint": "Label shown next to expense amounts (e.g. TMN, IRR, USD)."
     }
   },
   "account": {
@@ -294,5 +299,20 @@
     "forbidden": "You are not allowed to perform this action.",
     "unauthorized": "Please sign in.",
     "network": "Network error. Check your connection and try again."
+  },
+  "expenses": {
+    "title": "Expenses",
+    "whatFor": "What was the expense for?",
+    "titlePlaceholder": "e.g. Team lunch",
+    "amount": "Amount",
+    "add": "Add expense",
+    "saved": "Expense saved.",
+    "updated": "Expense updated.",
+    "deleted": "Expense deleted.",
+    "deleteTitle": "Delete expense",
+    "deleteMessage": "Delete \"{{title}}\"? This cannot be undone.",
+    "recent": "Recent expenses",
+    "empty": "No expenses recorded yet.",
+    "emptyHint": "Add your first expense from the form above."
   }
 }

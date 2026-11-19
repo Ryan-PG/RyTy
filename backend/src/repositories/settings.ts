@@ -35,6 +35,7 @@ export function createSettingsRepository(db: AppDatabase) {
         defaultLanguage: (map.default_language ?? SETTINGS_DEFAULTS.default_language) as AppSettings["defaultLanguage"],
         defaultTimezone: map.default_timezone ?? SETTINGS_DEFAULTS.default_timezone,
         reportsVisibility: (map.reports_visibility ?? SETTINGS_DEFAULTS.reports_visibility) as AppSettings["reportsVisibility"],
+        currency: map.currency ?? SETTINGS_DEFAULTS.currency,
       };
     },
   };

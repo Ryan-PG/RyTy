@@ -8,8 +8,9 @@ import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
 import { useTimer } from "../stores/TimerContext";
 import { useToast } from "../stores/ToastContext";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Spinner, Textarea } from "../components/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Segmented, Spinner, Textarea } from "../components/ui";
 import { ActivityFormModal } from "../components/ActivityFormModal";
+import { ExpenseSection } from "../components/ExpenseSection";
 import { ActivityRow } from "../components/ActivityRow";
 import { ProjectPicker } from "../components/ProjectPicker";
 import { TagInput } from "../components/TagInput";
@@ -37,6 +38,7 @@ export function DashboardPage() {
   const [stopping, setStopping] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [entryTab, setEntryTab] = useState<"task" | "expense">("task");
 
   const [today, setToday] = useState<{ totalSeconds: number; count: number } | null>(null);
   const [recent, setRecent] = useState<Activity[]>([]);
@@ -145,6 +147,23 @@ export function DashboardPage() {
         )}
       </div>
 
+      {/* Entry tabs: task (timer / manual) or expense */}
+      <div>
+        <Segmented<"task" | "expense">
+          ariaLabel={t("dashboard.entryTabs")}
+          value={entryTab}
+          onChange={setEntryTab}
+          options={[
+            { value: "task", label: t("dashboard.taskTab") },
+            { value: "expense", label: t("dashboard.expenseTab") },
+          ]}
+        />
+      </div>
+
+      {entryTab === "expense" ? (
+        <ExpenseSection />
+      ) : (
+        <>
       {/* Primary action: timer */}
       {loading ? (
         <Card className="flex items-center justify-center p-6">
@@ -301,6 +320,8 @@ export function DashboardPage() {
         }}
         initialMode={initialMode}
       />
+        </>
+      )}
 
       <ConfirmDialog
         open={cancelOpen}

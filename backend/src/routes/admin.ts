@@ -113,6 +113,7 @@ export function adminRoutes(): Hono {
       defaultLanguage: "default_language",
       defaultTimezone: "default_timezone",
       reportsVisibility: "reports_visibility",
+      currency: "currency",
     };
     for (const [field, key] of Object.entries(keyMap) as [keyof UpdateSettingsInput, string][]) {
       const value = body[field];

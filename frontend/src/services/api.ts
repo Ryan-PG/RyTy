@@ -4,12 +4,14 @@ import type {
   AppSettings,
   AuthUser,
   CreateActivityInput,
+  Expense,
   Paginated,
   Project,
   ReportSummary,
   SetupStatus,
   Tag,
   UpdateActivityInput,
+  UpdateExpenseInput,
   User,
   ActivityListQuery,
 } from "@ryty/shared";
@@ -142,6 +144,27 @@ export const api = {
 
   deleteActivity: (id: number) =>
     request<{ ok: boolean }>(`/api/activities/${id}`, { method: "DELETE" }),
+
+  /* ------------------------------ expenses --------------------------- */
+  listExpenses: (query: { page?: number; pageSize?: number; q?: string; from?: string; to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.page) params.set("page", String(query.page));
+    if (query.pageSize) params.set("pageSize", String(query.pageSize));
+    if (query.q) params.set("q", query.q);
+    if (query.from) params.set("from", query.from);
+    if (query.to) params.set("to", query.to);
+    const qs = params.toString();
+    return request<Paginated<Expense>>(`/api/expenses${qs ? `?${qs}` : ""}`);
+  },
+
+  createExpense: (payload: { title: string; description?: string | null; amountMinor: number; occurredOn?: string }) =>
+    request<Expense>("/api/expenses", jsonBody(payload)),
+
+  updateExpense: (id: number, payload: UpdateExpenseInput) =>
+    request<Expense>(`/api/expenses/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  deleteExpense: (id: number) =>
+    request<{ ok: boolean }>(`/api/expenses/${id}`, { method: "DELETE" }),
 
   /* ------------------------------- timer ----------------------------- */
   startTimer: (

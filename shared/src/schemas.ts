@@ -2,7 +2,11 @@ import { z } from "zod";
 import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_TITLE_MAX_LENGTH,
+  CURRENCY_MAX_LENGTH,
   ENTRY_TYPES,
+  EXPENSE_AMOUNT_MAX_MINOR,
+  EXPENSE_DESCRIPTION_MAX_LENGTH,
+  EXPENSE_TITLE_MAX_LENGTH,
   LANGUAGES,
   MAX_COOPS_PER_ACTIVITY,
   MAX_PAGE_SIZE,
@@ -215,6 +219,63 @@ export const activityListQuerySchema = z.object({
 export type ActivityListQuery = z.infer<typeof activityListQuerySchema>;
 
 /* ------------------------------------------------------------------ */
+/* Expenses                                                            */
+/* ------------------------------------------------------------------ */
+
+const expenseTitleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(EXPENSE_TITLE_MAX_LENGTH);
+
+const expenseDescriptionSchema = z
+  .string()
+  .trim()
+  .max(EXPENSE_DESCRIPTION_MAX_LENGTH)
+  .nullish();
+
+/**
+ * Expense amounts are integer minor units (e.g. cents) so no floating
+ * point money ever reaches the database.
+ */
+const amountMinorSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(EXPENSE_AMOUNT_MAX_MINOR);
+
+export const createExpenseSchema = z.object({
+  title: expenseTitleSchema,
+  description: expenseDescriptionSchema,
+  amountMinor: amountMinorSchema,
+  /** Local grouping date (defaults to today in the application timezone). */
+  occurredOn: localDateSchema.optional(),
+});
+
+export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+
+export const updateExpenseSchema = z.object({
+  title: expenseTitleSchema.optional(),
+  description: expenseDescriptionSchema,
+  amountMinor: amountMinorSchema.optional(),
+  occurredOn: localDateSchema.optional(),
+});
+
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+
+export const expenseListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
+  q: z.string().trim().max(200).optional(),
+  from: localDateSchema.optional(),
+  to: localDateSchema.optional(),
+  /** Filter by exact owner (admins / all_users visibility only). */
+  userId: z.coerce.number().int().positive().optional(),
+});
+
+export type ExpenseListQuery = z.infer<typeof expenseListQuerySchema>;
+
+/* ------------------------------------------------------------------ */
 /* Reports                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -271,6 +332,7 @@ export const updateSettingsSchema = z.object({
   defaultLanguage: z.enum(LANGUAGES).optional(),
   defaultTimezone: timezoneSchema.optional(),
   reportsVisibility: z.enum([REPORT_VISIBILITY.PRIVATE, REPORT_VISIBILITY.ALL_USERS]).optional(),
+  currency: z.string().trim().min(1).max(CURRENCY_MAX_LENGTH).optional(),
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

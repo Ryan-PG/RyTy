@@ -55,6 +55,22 @@ export interface Project {
   updatedAt: string;
 }
 
+/** Expense record as returned by the API. */
+export interface Expense {
+  id: number;
+  userId: number;
+  /** Populated by the API when the owner differs from the viewer. */
+  username?: string;
+  title: string;
+  description: string | null;
+  /** Amount in minor units (e.g. cents); divide by 100 for display. */
+  amountMinor: number;
+  /** Local grouping date, YYYY-MM-DD, in the application timezone. */
+  occurredOn: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Tag record as returned by the API. */
 export interface Tag {
   id: number;
@@ -90,6 +106,8 @@ export interface AuthUser extends User {
   defaultProjectId: number | null;
   /** Effective report visibility mode (personal scope vs. all users). */
   reportsVisibility: "private" | "all_users";
+  /** Currency label for expense amounts (application-wide setting). */
+  currency: string;
 }
 
 export interface AppSettings {
@@ -97,6 +115,7 @@ export interface AppSettings {
   defaultLanguage: Language;
   defaultTimezone: string;
   reportsVisibility: "private" | "all_users";
+  currency: string;
 }
 
 export interface SetupStatus {

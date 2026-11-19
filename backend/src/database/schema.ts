@@ -93,6 +93,29 @@ export const activities = sqliteTable("activities", {
   index("idx_activities_deleted").on(t.deletedAt),
 ]);
 
+/**
+ * Expenses entered per user. Amounts are integer minor units (e.g. cents)
+ * so money never touches floating point. The currency label is an
+ * application setting, not a per-row column.
+ */
+export const expenses = sqliteTable("expenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  amountMinor: integer("amount_minor").notNull(),
+  occurredOn: text("occurred_on").notNull(), // YYYY-MM-DD (app timezone)
+  /** Soft delete: set when the row is deleted; never surfaced again. */
+  deletedAt: text("deleted_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (t) => [
+  index("idx_expenses_user_occurred").on(t.userId, t.occurredOn),
+  index("idx_expenses_deleted").on(t.deletedAt),
+]);
+
 /** Many-to-many between activities and public tags. */
 export const activityTags = sqliteTable("activity_tags", {
   activityId: integer("activity_id")

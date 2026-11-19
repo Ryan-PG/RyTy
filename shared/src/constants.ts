@@ -56,6 +56,8 @@ export const SETTINGS_DEFAULTS = {
   default_language: "en",
   default_timezone: "UTC",
   reports_visibility: REPORT_VISIBILITY.PRIVATE,
+  /** Currency label shown next to expense amounts. */
+  currency: "TMN",
 } as const;
 
 export type SettingsKey = keyof typeof SETTINGS_DEFAULTS;
@@ -80,6 +82,14 @@ export const USERNAME_MAX_LENGTH = 40;
 
 export const ACTIVITY_TITLE_MAX_LENGTH = 200;
 export const ACTIVITY_DESCRIPTION_MAX_LENGTH = 2000;
+
+/** Expense constraints (amounts are stored as integer minor units). */
+export const EXPENSE_TITLE_MAX_LENGTH = 200;
+export const EXPENSE_DESCRIPTION_MAX_LENGTH = 2000;
+/** Maximum |amount| in minor units (10 billion major units). */
+export const EXPENSE_AMOUNT_MAX_MINOR = 1_000_000_000_000;
+/** Maximum length of the currency label (e.g. "TMN", "USD", "تومان"). */
+export const CURRENCY_MAX_LENGTH = 20;
 
 /** Pagination defaults and caps. */
 export const DEFAULT_PAGE_SIZE = 20;

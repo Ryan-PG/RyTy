@@ -101,8 +101,33 @@ export function formatUtcRange(
   return `${fmt(startIso)} – ${fmt(endIso)}`;
 }
 
-/** Greeting key by local hour in the user timezone. */
-export function greetingByHour(hour: number): "morning" | "afternoon" | "evening" {
+
+/**
+ * Format an amount given in minor units, e.g. 1234567 → "12,345.67".
+ * Trailing zeros are trimmed so TMN/IRR amounts read as plain integers.
+ */
+export function formatAmount(amountMinor: number, language: Language): string {
+  const value = amountMinor / 100;
+  const trimmed = Math.abs(value % 1) < 0.005 ? Math.round(value) : value;
+  try {
+    return numberFormatter(language, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: Number.isInteger(trimmed) ? 0 : 2,
+    }).format(trimmed);
+  } catch {
+    return String(trimmed);
+  }
+}
+
+/** Parse a user-typed decimal amount into minor units (or null). */
+export function parseAmountToMinor(input: string): number | null {
+  const normalized = input.trim().replace(/[^0-9.]/g, "");
+  if (!normalized || Number.isNaN(Number(normalized))) return null;
+  const minor = Math.round(Number(normalized) * 100);
+  return Number.isFinite(minor) && minor > 0 ? minor : null;
+}
+
+/** Greeting key by local hour in the user timezone. */export function greetingByHour(hour: number): "morning" | "afternoon" | "evening" {
   if (hour < 12) return "morning";
   if (hour < 18) return "afternoon";
   return "evening";
