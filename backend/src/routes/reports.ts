@@ -22,8 +22,9 @@ async function reportActivities(
   scope: number[] | null,
   from: string,
   to: string,
+  projectId?: number,
 ) {
-  const activities = await services.activities.listRange(scope, from, to);
+  const activities = await services.activities.listRange(scope, from, to, projectId);
   await hydrateActivities(services, activities);
   return activities;
 }
@@ -37,7 +38,7 @@ export function reportRoutes(): Hono {
     const user = c.get("user");
     const query = parseQuery(c, reportQuerySchema);
     const scope = await resolveReportScope(services, user, query.userId);
-    const activities = await reportActivities(services, scope, query.from, query.to);
+    const activities = await reportActivities(services, scope, query.from, query.to, query.projectId);
     return c.json({ data: summarizeActivities(query.from, query.to, activities) });
   });
 
@@ -77,7 +78,7 @@ export function reportRoutes(): Hono {
     const user = c.get("user");
     const query = parseQuery(c, reportQuerySchema);
     const scope = await resolveReportScope(services, user, query.userId);
-    const activities = await reportActivities(services, scope, query.from, query.to);
+    const activities = await reportActivities(services, scope, query.from, query.to, query.projectId);
     const csv = activitiesToCsv(activities);
     const filename = `ryty-report-${query.from}-to-${query.to}.csv`;
     return new Response(csv, {

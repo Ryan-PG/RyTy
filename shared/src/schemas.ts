@@ -210,7 +210,8 @@ export const activityListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   from: localDateSchema.optional(),
   to: localDateSchema.optional(),
-  projectId: z.coerce.number().int().positive().optional(),
+  /** Project filter; 0 selects activities without a project. */
+  projectId: z.coerce.number().int().min(0).optional(),
   /** Filter by exact tag name. */
   tag: z.string().trim().max(TAG_NAME_MAX_LENGTH).optional(),
   /** Admin (or all_users visibility) only. */
@@ -284,6 +285,8 @@ const reportQuerySchema = z.object({
   from: localDateSchema,
   to: localDateSchema,
   userId: z.coerce.number().int().positive().optional(),
+  /** Project filter; 0 selects activities without a project. */
+  projectId: z.coerce.number().int().min(0).optional(),
 });
 
 export const dailyReportQuerySchema = z.object({

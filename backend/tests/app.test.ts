@@ -393,3 +393,91 @@ describe("user isolation", () => {
     expect(res.json.error.code).toBe("not_owner");
   });
 });
+
+describe("project filters", () => {
+  let projectId = 0;
+  let withProjectId = 0;
+  let withoutProjectId = 0;
+
+  it("creates a project and two activities", async () => {
+    const project = await call(
+      "POST",
+      "/api/projects",
+      { name: "Filter test project" },
+      adminCookie,
+    );
+    expect(project.status).toBe(201);
+    projectId = project.json.data.id;
+
+    const withProject = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "duration", title: "With project", durationSeconds: 600, projectId },
+      adminCookie,
+    );
+    const withoutProject = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "duration", title: "Without project", durationSeconds: 300 },
+      adminCookie,
+    );
+    expect(withProject.status).toBe(201);
+    expect(withoutProject.status).toBe(201);
+    withProjectId = withProject.json.data.id;
+    withoutProjectId = withoutProject.json.data.id;
+  });
+
+  it("filters activities by project", async () => {
+    const res = await call("GET", `/api/activities?projectId=${projectId}`, undefined, adminCookie);
+    expect(res.status).toBe(200);
+    for (const item of res.json.data.data) {
+      expect(item.project?.id ?? null).toBe(projectId);
+    }
+  });
+
+  it("projectId=0 selects activities without a project", async () => {
+    const res = await call("GET", "/api/activities?projectId=0", undefined, adminCookie);
+    expect(res.status).toBe(200);
+    for (const item of res.json.data.data) {
+      expect(item.project).toBeNull();
+    }
+    const titles = res.json.data.data.map((a: any) => a.title);
+    expect(titles).toContain("Without project");
+    expect(titles).not.toContain("With project");
+  });
+
+  it("report summary honors the project filter", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const only = await call(
+      "GET",
+      `/api/reports/summary?from=${today}&to=${today}&projectId=${projectId}`,
+      undefined,
+      adminCookie,
+    );
+    expect(only.status).toBe(200);
+    expect(only.json.data.byProject).toHaveLength(1);
+    expect(only.json.data.byProject[0].projectId).toBe(projectId);
+
+    const none = await call(
+      "GET",
+      `/api/reports/summary?from=${today}&to=${today}&projectId=0`,
+      undefined,
+      adminCookie,
+    );
+    expect(none.status).toBe(200);
+    for (const row of none.json.data.byProject) {
+      expect(row.projectId).toBeNull();
+    }
+  });
+
+  it("report CSV export honors the project filter", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await app.request(
+      `/api/reports/export?from=${today}&to=${today}&projectId=${projectId}`,
+      { headers: { Cookie: adminCookie } },
+    );
+    const text = await res.text();
+    expect(text).toContain("With project");
+    expect(text).not.toContain("Without project");
+  });
+});

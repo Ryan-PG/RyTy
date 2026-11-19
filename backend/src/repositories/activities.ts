@@ -113,7 +113,11 @@ export function createActivityRepository(db: AppDatabase) {
       }
       if (query.from) conditions.push(gte(activities.occurredOn, query.from));
       if (query.to) conditions.push(lte(activities.occurredOn, query.to));
-      if (query.projectId) conditions.push(eq(activities.projectId, query.projectId));
+      if (query.projectId === 0) {
+        conditions.push(sql`${activities.projectId} IS NULL`);
+      } else if (query.projectId) {
+        conditions.push(eq(activities.projectId, query.projectId));
+      }
       if (query.tag) {
         conditions.push(
           sql`EXISTS (
@@ -178,12 +182,18 @@ export function createActivityRepository(db: AppDatabase) {
       userIds: number[] | null,
       from: string,
       to: string,
+      projectId?: number,
     ): Promise<Activity[]> {
       const conditions = [
         isNull(activities.deletedAt),
         gte(activities.occurredOn, from),
         lte(activities.occurredOn, to),
       ];
+      if (projectId === 0) {
+        conditions.push(sql`${activities.projectId} IS NULL`);
+      } else if (projectId) {
+        conditions.push(eq(activities.projectId, projectId));
+      }
       if (userIds && userIds.length > 0) {
         conditions.push(
           sql`${activities.userId} IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})`,

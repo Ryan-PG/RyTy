@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import type { ReportSummary } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
+import { useProjects } from "../stores/ProjectsContext";
 import { Button, Card, EmptyState, Input, Segmented, Select, Spinner } from "../components/ui";
 import { formatDurationCompact, formatLocalDate, todayIn } from "../utils/format";
 
@@ -51,6 +52,7 @@ function rangeFor(mode: Mode, date: string, customFrom: string, customTo: string
 export function ReportsPage() {
   const { t } = useTranslation();
   const { user, language } = useAuth();
+  const { usable } = useProjects();
 
   const timezone = user?.timezone ?? "UTC";
   const [mode, setMode] = useState<Mode>("weekly");
@@ -58,6 +60,7 @@ export function ReportsPage() {
   const [customFrom, setCustomFrom] = useState(() => todayIn(user?.timezone ?? "UTC"));
   const [customTo, setCustomTo] = useState(() => todayIn(user?.timezone ?? "UTC"));
   const [userId, setUserId] = useState<number | undefined>(undefined);
+  const [projectFilter, setProjectFilter] = useState("");
   const [users, setUsers] = useState<{ id: number; username: string }[]>([]);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   /** Rolling window: the past 7 days, independent of the selected period. */
@@ -78,17 +81,18 @@ export function ReportsPage() {
   }, []);
 
   const range = useMemo(() => rangeFor(mode, date, customFrom, customTo), [mode, date, customFrom, customTo]);
+  const projectId = projectFilter ? Number(projectFilter) : undefined;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setSummary(await api.reportSummary({ ...range, userId }));
+      setSummary(await api.reportSummary({ ...range, userId, projectId }));
     } catch {
       setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, userId]);
+  }, [range.from, range.to, userId, projectId]);
 
   useEffect(() => {
     void load();
@@ -140,7 +144,7 @@ export function ReportsPage() {
 
   const maxDaySeconds = Math.max(1, ...last7Days.map((d) => d.totalSeconds));
 
-  const exportHref = api.exportCsvUrl({ ...range, userId });
+  const exportHref = api.exportCsvUrl({ ...range, userId, projectId });
 
   return (
     <div className="flex flex-col gap-4">
@@ -181,6 +185,20 @@ export function ReportsPage() {
             <Input type="date" aria-label={t("common.to")} value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-36" />
           </div>
         )}
+        <Select
+          aria-label={t("projects.title")}
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value)}
+          className="w-40"
+        >
+          <option value="">{t("common.allProjects")}</option>
+          <option value="0">{t("reports.noProject")}</option>
+          {usable.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
         {canFilterByUser && (
           <Select
             aria-label={t("reports.userFilter")}

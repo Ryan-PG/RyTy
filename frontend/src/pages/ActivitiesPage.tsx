@@ -23,11 +23,25 @@ export function ActivitiesPage() {
   const { usable } = useProjects();
   const { toast } = useToast();
   const timezone = user?.timezone ?? "UTC";
+  const canFilterByUser = user?.role === "admin" || user?.reportsVisibility === "all_users";
+
+  useEffect(() => {
+    if (!canFilterByUser) return;
+    void (async () => {
+      try {
+        setUsers(await api.listUsersForFilter());
+      } catch {
+        setUsers([]);
+      }
+    })();
+  }, [canFilterByUser]);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
+  const [userFilter, setUserFilter] = useState("");
+  const [users, setUsers] = useState<{ id: number; username: string }[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -38,8 +52,8 @@ export function ActivitiesPage() {
   const [manualOpen, setManualOpen] = useState(false);
 
   const filtersKey = useMemo(
-    () => `${search}|${from}|${to}|${projectFilter}`,
-    [search, from, to, projectFilter],
+    () => `${search}|${from}|${to}|${projectFilter}|${userFilter}`,
+    [search, from, to, projectFilter, userFilter],
   );
 
   const load = useCallback(
@@ -53,6 +67,7 @@ export function ActivitiesPage() {
           from: from || undefined,
           to: to || undefined,
           projectId: projectFilter ? Number(projectFilter) : undefined,
+          userId: userFilter ? Number(userFilter) : undefined,
         });
         setActivities((prev) => (append ? [...prev, ...result.data] : result.data));
         setTotal(result.total);
@@ -127,18 +142,34 @@ export function ActivitiesPage() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <Select
-          aria-label={t("reports.userFilter")}
+          aria-label={t("projects.title")}
           value={projectFilter}
           onChange={(e) => setProjectFilter(e.target.value)}
           className="sm:w-44"
         >
           <option value="">{t("common.allProjects")}</option>
+          <option value="0">{t("projects.noProject")}</option>
           {usable.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
         </Select>
+        {canFilterByUser && (
+          <Select
+            aria-label={t("reports.userFilter")}
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
+            className="sm:w-40"
+          >
+            <option value="">{t("common.allUsers")}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.username}
+              </option>
+            ))}
+          </Select>
+        )}
         <div className="flex gap-2">
           <Input
             type="date"

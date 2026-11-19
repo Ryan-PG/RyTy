@@ -129,7 +129,7 @@ export const api = {
     if (query.q) params.set("q", query.q);
     if (query.from) params.set("from", query.from);
     if (query.to) params.set("to", query.to);
-    if (query.projectId) params.set("projectId", String(query.projectId));
+    if (query.projectId !== undefined) params.set("projectId", String(query.projectId));
     if (query.tag) params.set("tag", query.tag);
     if (query.userId) params.set("userId", String(query.userId));
     const qs = params.toString();
@@ -200,15 +200,17 @@ export const api = {
     request<(ActiveTimer & { elapsedSeconds: number }) | null>("/api/timer/active"),
 
   /* ------------------------------ reports ---------------------------- */
-  reportSummary: (query: { from: string; to: string; userId?: number }) => {
+  reportSummary: (query: { from: string; to: string; userId?: number; projectId?: number }) => {
     const params = new URLSearchParams({ from: query.from, to: query.to });
     if (query.userId) params.set("userId", String(query.userId));
+    if (query.projectId !== undefined) params.set("projectId", String(query.projectId));
     return request<ReportSummary>(`/api/reports/summary?${params}`);
   },
 
-  exportCsvUrl: (query: { from: string; to: string; userId?: number }) => {
+  exportCsvUrl: (query: { from: string; to: string; userId?: number; projectId?: number }) => {
     const params = new URLSearchParams({ from: query.from, to: query.to });
     if (query.userId) params.set("userId", String(query.userId));
+    if (query.projectId !== undefined) params.set("projectId", String(query.projectId));
     return `/api/reports/export?${params}`;
   },
 
