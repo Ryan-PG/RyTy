@@ -8,7 +8,7 @@ import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
 import { useTimer } from "../stores/TimerContext";
 import { useToast } from "../stores/ToastContext";
-import { Badge, Button, Card, EmptyState, Input, Spinner, Textarea } from "../components/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Spinner, Textarea } from "../components/ui";
 import { ActivityFormModal } from "../components/ActivityFormModal";
 import { ActivityRow } from "../components/ActivityRow";
 import { ProjectPicker } from "../components/ProjectPicker";
@@ -24,7 +24,7 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const { user, language } = useAuth();
   const { defaultProject } = useProjects();
-  const { active, elapsed, loading, start, pause, resume, stop } = useTimer();
+  const { active, elapsed, loading, start, pause, resume, stop, cancel } = useTimer();
   const { toast } = useToast();
 
   const [title, setTitle] = useState("");
@@ -35,6 +35,8 @@ export function DashboardPage() {
   const [cooperatorIds, setCooperatorIds] = useState<number[]>([]);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const [today, setToday] = useState<{ totalSeconds: number; count: number } | null>(null);
   const [recent, setRecent] = useState<Activity[]>([]);
@@ -101,6 +103,19 @@ export function DashboardPage() {
     }
   };
 
+  const onCancel = async () => {
+    setCancelling(true);
+    try {
+      await cancel();
+      toast(t("dashboard.timerCancelled"));
+      setCancelOpen(false);
+    } catch {
+      toast(t("common.errorGeneric"), "error");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const hourOfDay = greetingByHour(localHourIn(timezone));
   const greeting = t(
     hourOfDay === "morning"
@@ -145,12 +160,12 @@ export function DashboardPage() {
               <p className="mt-2 truncate text-base font-medium text-text">{active.title}</p>
             </div>
             <div className="text-end">
-              <div className="font-mono text-3xl font-semibold tabular" dir="ltr">
+              <div className="text-3xl font-semibold tabular" dir="ltr">
                 {formatDuration(elapsed, language)}
               </div>
             </div>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {active.state === "running" ? (
               <Button variant="secondary" onClick={() => void pause()}>
                 <Pause className="size-4" aria-hidden />
@@ -165,6 +180,9 @@ export function DashboardPage() {
             <Button variant="danger" loading={stopping} onClick={() => void onStop()}>
               <Square className="size-4" aria-hidden />
               {t("dashboard.stop")}
+            </Button>
+            <Button variant="ghost" onClick={() => setCancelOpen(true)}>
+              {t("dashboard.cancelTimer")}
             </Button>
           </div>
         </Card>
@@ -282,6 +300,18 @@ export function DashboardPage() {
           void loadSummary();
         }}
         initialMode={initialMode}
+      />
+
+      <ConfirmDialog
+        open={cancelOpen}
+        title={t("dashboard.cancelTimerTitle")}
+        message={t("dashboard.cancelTimerMessage", { title: active?.title ?? "" })}
+        confirmLabel={t("dashboard.cancelTimer")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        loading={cancelling}
+        onConfirm={() => void onCancel()}
+        onCancel={() => setCancelOpen(false)}
       />
     </div>
   );

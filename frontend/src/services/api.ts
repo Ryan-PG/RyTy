@@ -171,6 +171,8 @@ export const api = {
   stopTimer: (overrides?: { title?: string; description?: string | null }) =>
     request<Activity>("/api/timer/stop", { method: "POST", body: JSON.stringify(overrides ?? {}) }),
 
+  cancelTimer: () => request<{ ok: boolean }>("/api/timer/cancel", { method: "POST", body: "{}" }),
+
   activeTimer: () =>
     request<(ActiveTimer & { elapsedSeconds: number }) | null>("/api/timer/active"),
 

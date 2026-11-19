@@ -19,6 +19,8 @@ interface TimerContextValue {
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   stop: (overrides?: { title?: string; description?: string | null }) => Promise<EntryType>;
+  /** Discard the active timer without saving an activity. */
+  cancel: () => Promise<void>;
 }
 
 const TimerContext = createContext<TimerContextValue | null>(null);
@@ -95,9 +97,14 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     [syncAnchor],
   );
 
+  const cancel = useCallback(async () => {
+    await api.cancelTimer();
+    syncAnchor(null);
+  }, [syncAnchor]);
+
   const value = useMemo(
-    () => ({ active, elapsed, loading, refresh, start, pause, resume, stop }),
-    [active, elapsed, loading, refresh, start, pause, resume, stop],
+    () => ({ active, elapsed, loading, refresh, start, pause, resume, stop, cancel }),
+    [active, elapsed, loading, refresh, start, pause, resume, stop, cancel],
   );
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

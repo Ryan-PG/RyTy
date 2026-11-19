@@ -75,6 +75,19 @@ export async function resumeTimer(services: Services, user: AuthenticatedUser): 
   return resumed;
 }
 
+/**
+ * Cancel the active timer without saving an activity. The accumulated
+ * time is discarded and the timer row is deleted.
+ */
+export async function cancelTimer(
+  services: Services,
+  user: AuthenticatedUser,
+): Promise<void> {
+  const timer = await services.timers.findByUserId(user.id);
+  if (!timer) throw notFound("timer_not_active", "No active timer");
+  await services.timers.delete(user.id);
+}
+
 /** Stop the timer and convert it into a final activity row. */
 export async function stopTimer(
   services: Services,

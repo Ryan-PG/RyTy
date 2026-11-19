@@ -6,6 +6,7 @@ import {
   pauseTimer,
   resumeTimer,
   stopTimer,
+  cancelTimer,
   timerElapsedSeconds,
 } from "../services/timer";
 import { hydrateActivities } from "../services/activity";
@@ -58,6 +59,14 @@ export function timerRoutes(): Hono {
     const activity = await stopTimer(services, user, overrides, appSettings.defaultTimezone);
     await hydrateActivities(services, [activity]);
     return c.json({ data: activity });
+  });
+
+  // Cancel: discard the timer entirely without creating an activity.
+  app.post("/cancel", async (c) => {
+    const services = c.get("services");
+    const user = c.get("user");
+    await cancelTimer(services, user);
+    return c.json({ data: { ok: true } });
   });
 
   app.get("/active", async (c) => {
