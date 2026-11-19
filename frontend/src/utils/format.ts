@@ -65,7 +65,9 @@ export function formatLocalDate(
 ): string {
   const [y, m, d] = date.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  const calendar = dateFormat === "jalali" ? "-u-ca-persian" : "";
+  // Force the calendar explicitly: fa-IR would otherwise default to the
+  // Persian calendar even when the Gregorian display setting is chosen.
+  const calendar = dateFormat === "jalali" ? "-u-ca-persian" : "-u-ca-gregory";
   try {
     return new Intl.DateTimeFormat((language === "fa" ? "fa-IR" : "en-US") + calendar, {
       timeZone: "UTC",
