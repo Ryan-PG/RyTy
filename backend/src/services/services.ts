@@ -6,6 +6,7 @@ import { createTimerRepository, type TimerRepository } from "../repositories/tim
 import { createSettingsRepository, type SettingsRepository } from "../repositories/settings";
 import { createProjectRepository, type ProjectRepository } from "../repositories/projects";
 import { createTagRepository, type TagRepository } from "../repositories/tags";
+import { createCoopRepository, type CoopRepository } from "../repositories/coops";
 import {
   createLoginAttemptsRepository,
   type LoginAttemptsRepository,
@@ -24,6 +25,7 @@ export interface Services {
   settings: SettingsRepository;
   projects: ProjectRepository;
   tags: TagRepository;
+  coops: CoopRepository;
   loginAttempts: LoginAttemptsRepository;
 }
 
@@ -37,6 +39,7 @@ export function createServices(db: AppDatabase, config: AppConfig): Services {
     settings: createSettingsRepository(db),
     projects: createProjectRepository(db),
     tags: createTagRepository(db),
+    coops: createCoopRepository(db),
     loginAttempts: createLoginAttemptsRepository(db),
   };
 }

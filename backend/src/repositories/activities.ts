@@ -5,7 +5,11 @@ import type { Activity, ActivityListQuery, EntryType } from "@ryty/shared";
 
 type ActivityRow = typeof activities.$inferSelect;
 
-function toActivity(row: ActivityRow, username?: string | null, projectName?: string | null): Activity {
+function toActivity(
+  row: ActivityRow,
+  username?: string | null,
+  projectName?: string | null,
+): Activity {
   const activity: Activity = {
     id: row.id,
     userId: row.userId,
@@ -20,6 +24,7 @@ function toActivity(row: ActivityRow, username?: string | null, projectName?: st
       ? { id: row.projectId, name: projectName ?? "" }
       : null,
     tags: [],
+    cooperators: [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -75,6 +80,7 @@ export function createActivityRepository(db: AppDatabase) {
     /**
      * List activities with filters and pagination.
      * `userIds` is the access-scoped list: pass null to allow every user.
+     * Scoped users see activities they own OR where they are a co-doer.
      */
     async list(
       query: ActivityListQuery,
@@ -85,7 +91,12 @@ export function createActivityRepository(db: AppDatabase) {
       const conditions = [];
       if (userIds && userIds.length > 0) {
         conditions.push(
-          sql`${activities.userId} IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})`,
+          sql`(${activities.userId} IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})
+            OR EXISTS (
+              SELECT 1 FROM activity_coops ac
+              WHERE ac.activity_id = ${activities.id}
+              AND ac.user_id IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})
+            ))`,
         );
       } else if (userIds && userIds.length === 0) {
         return { data: [], total: 0 };

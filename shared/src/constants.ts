@@ -48,6 +48,7 @@ export const PROJECT_NAME_MAX_LENGTH = 80;
 export const PROJECT_DESCRIPTION_MAX_LENGTH = 500;
 export const TAG_NAME_MAX_LENGTH = 40;
 export const MAX_TAGS_PER_ACTIVITY = 12;
+export const MAX_COOPS_PER_ACTIVITY = 10;
 
 /** Settings keys stored in the `settings` table with their default values. */
 export const SETTINGS_DEFAULTS = {

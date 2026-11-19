@@ -34,6 +34,8 @@ export interface Activity {
   project: { id: number; name: string } | null;
   /** Tag names attached to this activity. */
   tags: string[];
+  /** Co-doers attached by the owner (never includes the owner). */
+  cooperators: { id: number; username: string }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +76,8 @@ export interface ActiveTimer {
   project: { id: number; name: string } | null;
   /** Tag names chosen at start; applied to the activity on stop. */
   tags: string[];
+  /** Co-doer user ids chosen at start; applied to the activity on stop. */
+  cooperatorIds: number[];
 }
 
 export interface AuthUser extends User {
@@ -84,6 +88,8 @@ export interface AuthUser extends User {
   theme: Theme;
   /** The user's default project (must be one they can access). */
   defaultProjectId: number | null;
+  /** Effective report visibility mode (personal scope vs. all users). */
+  reportsVisibility: "private" | "all_users";
 }
 
 export interface AppSettings {

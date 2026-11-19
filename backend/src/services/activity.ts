@@ -6,6 +6,21 @@ import { badRequest, forbidden, notFound, HttpError } from "../utils/http";
 import { occurredOn, zonedTimeToUtc } from "../utils/time";
 import { attachTags, canUseProject } from "./project";
 
+/** Validate and normalize co-doer ids: active users only, owner removed. */
+async function resolveCooperators(
+  services: Services,
+  ownerId: number,
+  cooperatorIds: number[] | undefined,
+): Promise<number[]> {
+  if (!cooperatorIds || cooperatorIds.length === 0) return [];
+  const unique = [...new Set(cooperatorIds)].filter((id) => id !== ownerId);
+  if (unique.length === 0) return [];
+  const found = await services.users.findActiveByIds(unique);
+  return found.map((u) => u.id);
+}
+
+/** Attach (creating if needed) tags to an activity. */
+
 export interface OverlapCheck {
   overlapping: Activity[];
 }
@@ -16,23 +31,48 @@ function diffSeconds(startIso: string, endIso: string): number {
 }
 
 /**
- * Attach tag names to a set of activities (single batched query, no N+1).
- * Mutates and returns the same array for convenience.
+ * Attach tag names and co-doers to a set of activities (two batched
+ * queries, no N+1). Mutates and returns the same array for convenience.
  */
-export async function withTagNames(services: Services, activities: Activity[]): Promise<Activity[]> {
+export async function hydrateActivities(services: Services, activities: Activity[]): Promise<Activity[]> {
   if (activities.length === 0) return activities;
-  const tagMap = await services.tags.namesForActivities(activities.map((a) => a.id));
+  const ids = activities.map((a) => a.id);
+  const [tagMap, coopMap] = await Promise.all([
+    services.tags.namesForActivities(ids),
+    services.coops.cooperatorsForActivities(ids),
+  ]);
   for (const activity of activities) {
     activity.tags = tagMap.get(activity.id) ?? [];
+    activity.cooperators = coopMap.get(activity.id) ?? [];
   }
   return activities;
 }
 
 /**
- * Access guard for a single activity: users may only touch their own
- * activities (admins included — they may view everything but not modify
- * other users' records).
+ * Access guard for reading one activity: the owner and any co-doer may
+ * view it. Returns whether the viewer is the owner (mutations are
+ * owner-only).
  */
+export async function getActivityForView(
+  services: Services,
+  user: AuthenticatedUser,
+  id: number,
+): Promise<{ activity: Activity; isOwner: boolean }> {
+  const activity = await services.activities.findById(id);
+  if (!activity) throw notFound("activity_not_found", "Activity not found");
+  if (activity.userId !== user.id) {
+    const isCoop = await services.coops.exists(id, user.id);
+    if (!isCoop) {
+      throw forbidden("not_owner", "You can only access your own activities");
+    }
+    // Co-doers see the owner's username for context.
+    const owner = await services.users.findById(activity.userId);
+    if (owner) activity.username = owner.username;
+  }
+  return { activity, isOwner: activity.userId === user.id };
+}
+
+/** Owner-only guard for mutations. */
 export async function getOwnedActivity(
   services: Services,
   user: AuthenticatedUser,
@@ -118,6 +158,10 @@ export async function createActivity(
       projectId,
     });
     await attachTags(services, user.id, activity.id, input.tags);
+    await services.coops.setForActivity(
+      activity.id,
+      await resolveCooperators(services, user.id, input.cooperatorIds),
+    );
     return (await services.activities.findById(activity.id)) ?? activity;
   }
 
@@ -135,6 +179,10 @@ export async function createActivity(
     projectId,
   });
   await attachTags(services, user.id, activity.id, input.tags);
+  await services.coops.setForActivity(
+    activity.id,
+    await resolveCooperators(services, user.id, input.cooperatorIds),
+  );
   return (await services.activities.findById(activity.id)) ?? activity;
 }
 
@@ -203,6 +251,12 @@ export async function updateActivity(
   if (!updated) throw notFound("activity_not_found", "Activity not found");
   if (input.tags !== undefined) {
     await attachTags(services, user.id, id, input.tags);
+  }
+  if (input.cooperatorIds !== undefined) {
+    await services.coops.setForActivity(
+      id,
+      await resolveCooperators(services, user.id, input.cooperatorIds),
+    );
   }
   void existing;
   return (await services.activities.findById(id)) ?? updated;

@@ -8,7 +8,7 @@ import {
   stopTimer,
   timerElapsedSeconds,
 } from "../services/timer";
-import { withTagNames } from "../services/activity";
+import { hydrateActivities } from "../services/activity";
 
 /** Timer lifecycle routes. All require an authenticated user. */
 export function timerRoutes(): Hono {
@@ -25,6 +25,7 @@ export function timerRoutes(): Hono {
       body.description ?? null,
       body.projectId ?? null,
       body.tags,
+      body.cooperatorIds,
     );
     return c.json({ data: { ...timer, elapsedSeconds: timerElapsedSeconds(timer) } }, 201);
   });
@@ -55,7 +56,7 @@ export function timerRoutes(): Hono {
         typeof raw.description === "string" ? raw.description.trim() || null : undefined,
     };
     const activity = await stopTimer(services, user, overrides, appSettings.defaultTimezone);
-    await withTagNames(services, [activity]);
+    await hydrateActivities(services, [activity]);
     return c.json({ data: activity });
   });
 

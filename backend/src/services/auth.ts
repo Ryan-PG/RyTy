@@ -57,6 +57,7 @@ export async function toAuthUser(services: Services, user: AuthUserSource): Prom
     timezone,
     theme: theme as AuthUser["theme"],
     defaultProjectId: user.defaultProjectId ?? null,
+    reportsVisibility: appSettings.reportsVisibility,
   };
 }
 

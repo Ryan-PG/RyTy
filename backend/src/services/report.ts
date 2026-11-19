@@ -111,6 +111,7 @@ export function activitiesToCsv(activities: Activity[]): string {
   const header = [
     "occurred_on",
     "username",
+    "co_doers",
     "project",
     "title",
     "description",
@@ -129,6 +130,7 @@ export function activitiesToCsv(activities: Activity[]): string {
       [
         a.occurredOn,
         a.username ?? String(a.userId),
+        a.cooperators.map((c) => c.username).join(" "),
         a.project?.name ?? "",
         a.title,
         a.description ?? "",

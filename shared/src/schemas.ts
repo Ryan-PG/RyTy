@@ -4,6 +4,7 @@ import {
   ACTIVITY_TITLE_MAX_LENGTH,
   ENTRY_TYPES,
   LANGUAGES,
+  MAX_COOPS_PER_ACTIVITY,
   MAX_PAGE_SIZE,
   MAX_TAGS_PER_ACTIVITY,
   PASSWORD_MAX_LENGTH,
@@ -114,12 +115,18 @@ const tagNamesSchema = z
   .array(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH))
   .max(MAX_TAGS_PER_ACTIVITY);
 
-/** Timer start: title, description, optional project and tags. */
+/** Co-doer user ids (deduped/cleaned server-side; owner removed). */
+const cooperatorIdsSchema = z
+  .array(z.number().int().positive())
+  .max(MAX_COOPS_PER_ACTIVITY);
+
+/** Timer start: title, description, optional project, tags, co-doers. */
 export const timerStartSchema = z.object({
   title: titleSchema,
   description: descriptionSchema,
   projectId: z.number().int().positive().nullish(),
   tags: tagNamesSchema.optional(),
+  cooperatorIds: cooperatorIdsSchema.optional(),
 });
 
 export const tagListQuerySchema = z.object({
@@ -143,6 +150,7 @@ export const rangeActivitySchema = z.object({
   allowOverlap: z.boolean().optional().default(false),
   projectId: z.number().int().positive().nullish(),
   tags: tagNamesSchema.optional(),
+  cooperatorIds: cooperatorIdsSchema.optional(),
 });
 
 /** Manual duration entry. No timestamps are required. */
@@ -156,6 +164,7 @@ export const durationActivitySchema = z.object({
   occurredOn: localDateSchema.optional(),
   projectId: z.number().int().positive().nullish(),
   tags: tagNamesSchema.optional(),
+  cooperatorIds: cooperatorIdsSchema.optional(),
 });
 
 /** Timer stop: client may pass the same title/description it started with. */
@@ -185,6 +194,7 @@ export const updateActivitySchema = z.object({
   allowOverlap: z.boolean().optional().default(false),
   projectId: z.number().int().positive().nullish(),
   tags: tagNamesSchema.optional(),
+  cooperatorIds: cooperatorIdsSchema.optional(),
 });
 
 export type UpdateActivityInput = z.infer<typeof updateActivitySchema>;

@@ -7,7 +7,7 @@ import {
 } from "@ryty/shared";
 import { parseQuery } from "../validators/validate";
 import { resolveReportScope, summarizeActivities, activitiesToCsv } from "../services/report";
-import { withTagNames } from "../services/activity";
+import { hydrateActivities } from "../services/activity";
 import { addDays, isoWeekStart, monthStart } from "../utils/time";
 import type { Services } from "../services/services";
 
@@ -24,7 +24,7 @@ async function reportActivities(
   to: string,
 ) {
   const activities = await services.activities.listRange(scope, from, to);
-  await withTagNames(services, activities);
+  await hydrateActivities(services, activities);
   return activities;
 }
 

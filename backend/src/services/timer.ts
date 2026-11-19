@@ -28,6 +28,7 @@ export async function startTimer(
   description: string | null,
   projectId: number | null,
   tagNames: string[] | undefined,
+  cooperatorIds: number[] | undefined,
 ): Promise<ActiveTimer> {
   const existing = await services.timers.findByUserId(user.id);
   if (existing) {
@@ -37,6 +38,14 @@ export async function startTimer(
   const resolvedProjectId =
     projectId != null ? (await canUseProject(services, user, projectId)).id : null;
   const tags = tagNames ? (await services.tags.ensureMany(tagNames, user.id)).map((t) => t.name) : [];
+  // Validate co-doers up-front so errors surface at start, not at stop.
+  const coops: number[] = [];
+  if (cooperatorIds && cooperatorIds.length > 0) {
+    const found = await services.users.findActiveByIds(
+      [...new Set(cooperatorIds)].filter((id) => id !== user.id),
+    );
+    coops.push(...found.map((u) => u.id));
+  }
   return services.timers.create({
     userId: user.id,
     title,
@@ -44,6 +53,7 @@ export async function startTimer(
     startedAt: now,
     projectId: resolvedProjectId,
     tagNames: tags,
+    cooperatorIds: coops,
   });
 }
 
@@ -91,6 +101,7 @@ export async function stopTimer(
     projectId: timer.project?.id ?? null,
   });
   await attachTags(services, user.id, activity.id, timer.tags);
+  await services.coops.setForActivity(activity.id, timer.cooperatorIds);
   await services.timers.delete(user.id);
   return (await services.activities.findById(activity.id)) ?? activity;
 }

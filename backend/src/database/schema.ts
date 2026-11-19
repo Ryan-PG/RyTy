@@ -102,6 +102,23 @@ export const activityTags = sqliteTable("activity_tags", {
   index("idx_activity_tags_tag").on(t.tagId),
 ]);
 
+/**
+ * Co-doers ("co-operators") attached to an activity by its owner. The
+ * activity owner is always `activities.user_id`; co-doers gain read access
+ * to the activity, while editing stays with the owner.
+ */
+export const activityCoops = sqliteTable("activity_coops", {
+  activityId: integer("activity_id")
+    .notNull()
+    .references(() => activities.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull(),
+}, (t) => [
+  index("idx_activity_coops_user").on(t.userId),
+]);
+
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   userId: integer("user_id")
@@ -135,6 +152,8 @@ export const timers = sqliteTable("timers", {
     onDelete: "set null",
   }),
   tags: text("tags"), // JSON array of tag names
+  /** JSON array of co-doer user ids chosen at start. */
+  cooperatorIds: text("cooperator_ids"),
   updatedAt: text("updated_at").notNull(),
 });
 

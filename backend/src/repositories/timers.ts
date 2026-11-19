@@ -6,15 +6,24 @@ import type { ActiveTimer, TimerState } from "@ryty/shared";
 type TimerRow = typeof timers.$inferSelect;
 
 function toTimer(row: TimerRow, projectName: string | null): ActiveTimer {
-  let tagNames: string[] = [];
-  if (row.tags) {
+  const parseJsonArray = (raw: string | null): string[] => {
+    if (!raw) return [];
     try {
-      const parsed: unknown = JSON.parse(row.tags);
-      if (Array.isArray(parsed)) tagNames = parsed.filter((t): t is string => typeof t === "string");
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : [];
     } catch {
-      tagNames = [];
+      return [];
     }
-  }
+  };
+  const parseJsonIds = (raw: string | null): number[] => {
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((t): t is number => typeof t === "number") : [];
+    } catch {
+      return [];
+    }
+  };
   return {
     userId: row.userId,
     title: row.title,
@@ -24,7 +33,8 @@ function toTimer(row: TimerRow, projectName: string | null): ActiveTimer {
     accumulatedSeconds: row.accumulatedSeconds,
     startedAt: row.startedAt,
     project: row.projectId ? { id: row.projectId, name: projectName ?? "" } : null,
-    tags: tagNames,
+    tags: parseJsonArray(row.tags),
+    cooperatorIds: parseJsonIds(row.cooperatorIds),
   };
 }
 
@@ -35,6 +45,7 @@ export interface CreateTimerInput {
   startedAt: string;
   projectId: number | null;
   tagNames: string[];
+  cooperatorIds: number[];
 }
 
 export function createTimerRepository(db: AppDatabase) {
@@ -62,6 +73,8 @@ export function createTimerRepository(db: AppDatabase) {
           startedAt: input.startedAt,
           projectId: input.projectId,
           tags: input.tagNames.length > 0 ? JSON.stringify(input.tagNames) : null,
+          cooperatorIds:
+            input.cooperatorIds.length > 0 ? JSON.stringify(input.cooperatorIds) : null,
           updatedAt: input.startedAt,
         })
         .returning();

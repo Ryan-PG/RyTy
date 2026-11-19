@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { users } from "../database/schema";
 import type { AppDatabase } from "../database/adapter";
 import type { Role, User } from "@ryty/shared";
@@ -45,6 +45,16 @@ export function createUserRepository(db: AppDatabase) {
     async findById(id: number): Promise<User | null> {
       const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
       return row ? toUser(row) : null;
+    },
+
+    /** Active users by ids — used to validate co-doers. */
+    async findActiveByIds(ids: number[]): Promise<User[]> {
+      if (ids.length === 0) return [];
+      const rows = await db
+        .select()
+        .from(users)
+        .where(and(inArray(users.id, ids), eq(users.isActive, true)));
+      return rows.map(toUser);
     },
 
     /** Full row including the password hash — internal use only. */
