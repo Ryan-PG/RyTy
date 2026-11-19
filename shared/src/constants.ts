@@ -58,6 +58,8 @@ export const SETTINGS_DEFAULTS = {
   reports_visibility: REPORT_VISIBILITY.PRIVATE,
   /** Currency label shown next to expense amounts. */
   currency: "TMN",
+  /** Calendar used to display dates. */
+  date_format: "gregorian",
 } as const;
 
 export type SettingsKey = keyof typeof SETTINGS_DEFAULTS;
@@ -68,6 +70,13 @@ export type Language = (typeof LANGUAGES)[number];
 
 export const THEMES = ["light", "dark", "system"] as const;
 export type Theme = (typeof THEMES)[number];
+
+/**
+ * Display calendar. Storage is always UTC/Gregorian; this setting only
+ * changes how dates are rendered (Persian Jalali or Gregorian).
+ */
+export const DATE_FORMATS = ["gregorian", "jalali"] as const;
+export type DateFormat = (typeof DATE_FORMATS)[number];
 
 /** Maximum number of failed logins per username+IP within the window. */
 export const LOGIN_RATE_LIMIT_MAX = 5;

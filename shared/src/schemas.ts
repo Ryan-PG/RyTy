@@ -3,6 +3,7 @@ import {
   ACTIVITY_DESCRIPTION_MAX_LENGTH,
   ACTIVITY_TITLE_MAX_LENGTH,
   CURRENCY_MAX_LENGTH,
+  DATE_FORMATS,
   ENTRY_TYPES,
   EXPENSE_AMOUNT_MAX_MINOR,
   EXPENSE_DESCRIPTION_MAX_LENGTH,
@@ -333,6 +334,7 @@ export const updateSettingsSchema = z.object({
   defaultTimezone: timezoneSchema.optional(),
   reportsVisibility: z.enum([REPORT_VISIBILITY.PRIVATE, REPORT_VISIBILITY.ALL_USERS]).optional(),
   currency: z.string().trim().min(1).max(CURRENCY_MAX_LENGTH).optional(),
+  dateFormat: z.enum(DATE_FORMATS).optional(),
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

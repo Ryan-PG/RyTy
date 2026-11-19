@@ -1,4 +1,4 @@
-import type { EntryType, Language, Role, Theme, TimerState } from "./constants";
+import type { DateFormat, EntryType, Language, Role, Theme, TimerState } from "./constants";
 
 /** User record as returned by the API (never contains secrets). */
 export interface User {
@@ -108,6 +108,8 @@ export interface AuthUser extends User {
   reportsVisibility: "private" | "all_users";
   /** Currency label for expense amounts (application-wide setting). */
   currency: string;
+  /** Calendar used to display dates (application-wide setting). */
+  dateFormat: DateFormat;
 }
 
 export interface AppSettings {
@@ -116,6 +118,7 @@ export interface AppSettings {
   defaultTimezone: string;
   reportsVisibility: "private" | "all_users";
   currency: string;
+  dateFormat: DateFormat;
 }
 
 export interface SetupStatus {

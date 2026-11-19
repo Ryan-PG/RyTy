@@ -52,12 +52,22 @@ export function formatDurationCompact(totalSeconds: number, language: Language):
     : `${h}h${m > 0 ? ` ${m}m` : ""}`;
 }
 
-/** Localized calendar date for a local YYYY-MM-DD string (no TZ math). */
-export function formatLocalDate(date: string, language: Language, opts?: Intl.DateTimeFormatOptions): string {
+/**
+ * Localized calendar date for a local YYYY-MM-DD string (no TZ math).
+ * `dateFormat` switches the display calendar (Jalali / Gregorian); the
+ * underlying data always stays Gregorian ISO.
+ */
+export function formatLocalDate(
+  date: string,
+  language: Language,
+  opts?: Intl.DateTimeFormatOptions,
+  dateFormat: "gregorian" | "jalali" = "gregorian",
+): string {
   const [y, m, d] = date.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
+  const calendar = dateFormat === "jalali" ? "-u-ca-persian" : "";
   try {
-    return new Intl.DateTimeFormat(language === "fa" ? "fa-IR" : "en-US", {
+    return new Intl.DateTimeFormat((language === "fa" ? "fa-IR" : "en-US") + calendar, {
       timeZone: "UTC",
       weekday: opts?.weekday,
       year: opts?.year ?? "numeric",
@@ -68,6 +78,16 @@ export function formatLocalDate(date: string, language: Language, opts?: Intl.Da
   } catch {
     return date;
   }
+}
+
+/** Today's date formatted with the app-wide display calendar. */
+export function formatToday(timezone: string, language: Language, dateFormat: "gregorian" | "jalali"): string {
+  return formatLocalDate(todayIn(timezone), language, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }, dateFormat);
 }
 
 /** Localized wall-clock time for a local "YYYY-MM-DDTHH:mm" string. */

@@ -59,6 +59,7 @@ export async function toAuthUser(services: Services, user: AuthUserSource): Prom
     defaultProjectId: user.defaultProjectId ?? null,
     reportsVisibility: appSettings.reportsVisibility,
     currency: appSettings.currency,
+    dateFormat: appSettings.dateFormat,
   };
 }
 

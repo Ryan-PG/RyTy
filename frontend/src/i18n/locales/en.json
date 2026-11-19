@@ -260,7 +260,11 @@
       "languageEn": "English",
       "languageFa": "Persian (فارسی)",
       "currency": "Currency",
-      "currencyHint": "Label shown next to expense amounts (e.g. TMN, IRR, USD)."
+      "currencyHint": "Label shown next to expense amounts (e.g. TMN, IRR, USD).",
+      "dateFormat": "Date format",
+      "dateFormatHint": "How dates are displayed. Stored data always stays UTC/Gregorian.",
+      "dateFormatGregorian": "Gregorian",
+      "dateFormatJalali": "Jalali (Persian calendar)"
     }
   },
   "account": {

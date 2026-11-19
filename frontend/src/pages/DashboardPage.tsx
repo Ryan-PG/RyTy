@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Pause, Play, Plus, Square } from "lucide-react";
+import { CalendarDays, Pause, Play, Plus, Square } from "lucide-react";
 import type { Activity } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
@@ -15,7 +15,7 @@ import { ActivityRow } from "../components/ActivityRow";
 import { ProjectPicker } from "../components/ProjectPicker";
 import { TagInput } from "../components/TagInput";
 import { CoopPicker } from "../components/CoopPicker";
-import { formatDuration, formatDurationCompact, greetingByHour, localHourIn } from "../utils/format";
+import { formatDuration, formatDurationCompact, formatToday, greetingByHour, localHourIn } from "../utils/format";
 
 /**
  * Home screen: quick activity entry first. Timer input leads; manual entry,
@@ -130,12 +130,19 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-lg font-semibold">
-          {greeting}
-          {user ? `, ${user.username}` : ""}
-        </h1>
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold">
+            {greeting}
+            {user ? `, ${user.username}` : ""}
+          </h1>
+          {/* Today's date in the calendar chosen in Admin → Settings. */}
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+            <CalendarDays className="size-4 shrink-0" aria-hidden />
+            {formatToday(timezone, language, user?.dateFormat ?? "gregorian")}
+          </p>
+        </div>
         {today && (
-          <div className="text-sm text-muted">
+          <div className="shrink-0 text-sm text-muted">
             <span className="font-semibold text-text tabular">
               {formatDurationCompact(today.totalSeconds, language)}
             </span>{" "}

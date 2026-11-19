@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
 import type { AppSettings, Project, User } from "@ryty/shared";
-import { COMMON_TIMEZONES, LANGUAGES } from "@ryty/shared";
+import { COMMON_TIMEZONES, DATE_FORMATS, LANGUAGES } from "@ryty/shared";
 import { api, ApiError } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
@@ -768,6 +768,19 @@ function SettingsTab() {
             placeholder="TMN"
             onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
           />
+        </Field>
+        <Field label={t("admin.settings.dateFormat")} hint={t("admin.settings.dateFormatHint")} htmlFor="st-dateformat">
+          <Select
+            id="st-dateformat"
+            value={settings.dateFormat}
+            onChange={(e) => setSettings({ ...settings, dateFormat: e.target.value as AppSettings["dateFormat"] })}
+          >
+            {DATE_FORMATS.map((format) => (
+              <option key={format} value={format}>
+                {format === "gregorian" ? t("admin.settings.dateFormatGregorian") : t("admin.settings.dateFormatJalali")}
+              </option>
+            ))}
+          </Select>
         </Field>
       </Card>
 

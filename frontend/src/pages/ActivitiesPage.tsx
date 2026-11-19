@@ -104,7 +104,7 @@ export function ActivitiesPage() {
     const yesterday = yesterdayDate.toISOString().slice(0, 10);
     if (date === today) return t("common.today");
     if (date === yesterday) return t("common.yesterday");
-    return formatLocalDate(date, language, { weekday: "long" });
+    return formatLocalDate(date, language, { weekday: "long" }, user?.dateFormat ?? "gregorian");
   };
 
   return (

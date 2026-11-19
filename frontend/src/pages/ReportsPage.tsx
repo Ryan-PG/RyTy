@@ -130,10 +130,12 @@ export function ReportsPage() {
     setDate(shiftDate(date, direction * (step || 1)));
   };
 
+  const dateFormat = user?.dateFormat ?? "gregorian";
+
   const periodLabel = () => {
     const opts: Intl.DateTimeFormatOptions = mode === "monthly" ? { year: "numeric", month: "long" } : { weekday: mode === "daily" ? "long" : undefined, year: "numeric", month: "short", day: "numeric" };
-    if (mode === "daily") return formatLocalDate(date, language, opts);
-    return `${formatLocalDate(range.from, language, opts)} — ${formatLocalDate(range.to, language, opts)}`;
+    if (mode === "daily") return formatLocalDate(date, language, opts, dateFormat);
+    return `${formatLocalDate(range.from, language, opts, dateFormat)} — ${formatLocalDate(range.to, language, opts, dateFormat)}`;
   };
 
   const maxDaySeconds = Math.max(1, ...last7Days.map((d) => d.totalSeconds));
@@ -290,7 +292,7 @@ export function ReportsPage() {
           <div className="flex flex-col gap-1.5">
             {last7Days.map((d) => (
               <div key={d.date} className="flex items-center gap-2.5">
-                <span className="w-28 shrink-0 text-xs text-muted">{formatLocalDate(d.date, language, { weekday: "short", month: "short", day: "numeric" })}</span>
+                <span className="w-28 shrink-0 text-xs text-muted">{formatLocalDate(d.date, language, { weekday: "short", month: "short", day: "numeric" }, dateFormat)}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
                   <div
                     className="h-full rounded-full bg-accent"

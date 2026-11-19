@@ -260,7 +260,11 @@
       "languageEn": "انگلیسی",
       "languageFa": "فارسی",
       "currency": "واحد پول",
-      "currencyHint": "برچسب نمایشی کنار مبالغ (مثلاً TMN، IRR، USD)."
+      "currencyHint": "برچسب نمایشی کنار مبالغ (مثلاً TMN، IRR، USD).",
+      "dateFormat": "قالب تاریخ",
+      "dateFormatHint": "نحوه نمایش تاریخ‌ها. داده‌های ذخیره‌شده همیشه میلادی/UTC می‌مانند.",
+      "dateFormatGregorian": "میلادی",
+      "dateFormatJalali": "جلالی (شمسی)"
     }
   },
   "account": {
