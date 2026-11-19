@@ -9,7 +9,7 @@
 **ردیابی ساده و سریع فعالیت و زمان تیم — موبایل‌محور و کم‌حجم**
 
 [![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue?logo=githubactions)](.github/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-informational)
 ![i18n](https://img.shields.io/badge/i18n-English%20%7C%20%D9%81%D8%A7%D8%B1%D8%B3%DB%8C-blueviolet)
 
@@ -27,11 +27,14 @@ RyTy is a lightweight tool for teams to record **what** they worked on, **how lo
 2. Type what you're working on → start the timer (or add time manually)
 3. Leave
 
-- ⏱️ **Timer tracking** — start / pause / resume / stop; timekeeping is computed **server-side** and survives refreshes and closed tabs
+- ⏱️ **Timer tracking** — start / pause / resume / stop / cancel; timekeeping is computed **server-side** and survives refreshes and closed tabs
 - ✍️ **Manual entry** — time range (with overlap detection) or duration-only
+- 💸 **Expenses** — quick expense entry from a second Home tab; admin-configurable currency label (TMN, IRR, USD, …)
+- 🗓️ **Jalali or Gregorian display** — admin setting; all data stays UTC/Gregorian underneath
 - 📁 **Projects** — admins define public (team-wide) or private projects; users can create their own or suggest one to the admin for public review; everyone can pick a **default project**
 - 🏷️ **Tags** — public tags anyone can create; type a tag and press `,` to attach it, with instant autocomplete
-- 👥 **Co-doers** — add teammates to any task as pair-doers; they see it in their own list while time and editing stay with you
+- 👥 **Co-doers** — add teammates to any task as pair-doers; they see it in their own list and can edit or delete it, while time stays attributed to you
+- 🧹 **Soft delete** — deleted activities/expenses are hidden from the app but kept in the database for audit
 - 📊 **Reports** — daily / weekly / monthly / custom, grouped by day, user, project and activity, with **CSV export** (UTF-8, Persian-safe)
 - 👥 **Two roles** — Admin (user management, app settings) and User; no public registration
 - 🔒 **Secure by design** — session cookies (hashed tokens, HttpOnly), PBKDF2 password hashing, login rate limiting, CSRF protection, mandatory first-login password change, secret-based admin bootstrap
@@ -76,7 +79,7 @@ ryty/
 ├── shared/            # types + zod schemas shared by FE & BE
 ├── migrations/        # SQL migrations (D1 & SQLite compatible)
 ├── docker/            # Dockerfile
-└── wrangler.jsonc     # Cloudflare configuration
+└── wrangler.example.jsonc  # Cloudflare config template; wrangler.jsonc is generated from it (git-ignored)
 ```
 
 |          | Cloudflare (primary)         | Docker                         |
@@ -90,9 +93,15 @@ ryty/
 
 ```bash
 npm install
+D1_DATABASE_ID=00000000-0000-0000-0000-000000000000 npm run config:generate
+# ↑ generates wrangler.jsonc for the LOCAL runtime — any valid UUID works,
+#   never use your production database id here
 npm run db:migrate:d1:local   # create local D1 schema
 npm run dev                   # Vite dev server (Cloudflare runtime)
 ```
+
+Then create `.dev.vars` (git-ignored) with `INITIAL_ADMIN_USERNAME` /
+`INITIAL_ADMIN_PASSWORD` and sign in with those credentials.
 
 ### Run the Docker/Node build locally
 
@@ -103,28 +112,38 @@ INITIAL_ADMIN_USERNAME=admin INITIAL_ADMIN_PASSWORD=choose-a-long-password npm s
 
 ## ☁️ Deploy to Cloudflare
 
-1. **Create the database and set its id**
-   ```bash
-   npx wrangler d1 create ryty
-   # → paste the returned database_id into wrangler.jsonc
-   ```
-2. **Apply migrations**
-   ```bash
-   npx wrangler d1 migrations apply ryty --remote
-   ```
-3. **Configure the initial administrator (secret — never in Git)**
-   ```bash
-   npx wrangler secret put INITIAL_ADMIN_PASSWORD
-   # optional: npx wrangler secret put INITIAL_ADMIN_USERNAME  (default: admin)
-   ```
-4. **Deploy**
-   ```bash
-   npm run deploy
-   ```
-5. Open the app. If the secret is missing you will see a **setup screen** with exact instructions — RyTy never creates an insecure default admin and never asks for secrets in a web form.
-6. Sign in with the bootstrap credentials → you are **forced to choose a new password** before continuing.
+The real `wrangler.jsonc` is **generated at deploy time** from the committed
+template (`wrangler.example.jsonc`) using your D1 database id — nothing
+environment-specific is committed to Git.
 
-**GitHub integration:** connect the repo in the Cloudflare dashboard — build command `npm run build`, deploy command `npx wrangler deploy`. Every push can deploy automatically.
+```bash
+# 1. Create your own database (or reuse an existing one — never create a
+#    new database just to redeploy an existing instance)
+npx wrangler d1 create ryty
+
+# 2. Generate wrangler.jsonc from the template with YOUR database id
+D1_DATABASE_ID=<database_id-from-step-1> npm run config:generate
+
+# 3. Configure the initial administrator (secret — never in Git)
+npx wrangler secret put INITIAL_ADMIN_PASSWORD
+# optional: npx wrangler secret put INITIAL_ADMIN_USERNAME  (default: admin)
+
+# 4. Build, apply remote migrations and deploy
+npm run deploy
+```
+
+Sign in with the bootstrap credentials → you are **forced to choose a new
+password** before continuing. If the secret is missing you will see a setup
+screen with exact instructions — RyTy never creates an insecure default admin
+and never asks for secrets in a web form.
+
+**GitHub integration (Cloudflare Workers Builds):** build command
+`npm run config:generate && npm run build`, deploy command `npm run deploy:cf`,
+and `D1_DATABASE_ID` configured under **Build variables and secrets** (build
+variables are not the same as Worker runtime variables/secrets).
+
+📖 **Full step-by-step guide:** [deployment-guide.md](./deployment-guide.md)
+(راهنمای فارسی: [deployment-guide.fa.md](./deployment-guide.fa.md))
 
 ## 🐳 Deploy with Docker
 
@@ -142,6 +161,7 @@ docker compose up -d --build
 
 | Variable                 | Required    | Description                                                               |
 | ------------------------ | ----------- | ------------------------------------------------------------------------- |
+| `D1_DATABASE_ID`         | Cloudflare build | Your D1 database id; injected into the generated `wrangler.jsonc` during the build |
 | `INITIAL_ADMIN_USERNAME` | –           | Bootstrap admin username (default `admin`)                                |
 | `INITIAL_ADMIN_PASSWORD` | ✅ (secret) | Bootstrap admin password; used only until first login, then forced change |
 | `APP_TIMEZONE`           | –           | Fallback timezone for day grouping (default `UTC`)                        |
@@ -155,7 +175,7 @@ Cloudflare uses the same names as Worker **vars** (non-secrets) and **secrets** 
 
 ```bash
 npm run typecheck   # strict TS across frontend / backend / shared
-npm test            # 41 unit + integration tests (vitest)
+npm test            # 92 unit + integration tests (vitest)
 npm run build       # production client + server build
 ```
 
@@ -163,6 +183,7 @@ Business rules (auth, authorization, timer lifecycle, report visibility) are enf
 
 ## 📄 Documentation
 
+- [deployment-guide.md](./deployment-guide.md) — **complete Cloudflare deployment guide** (manual + GitHub integration) · [فارسی](./deployment-guide.fa.md)
 - [PROJECT-SPECIFICATION.md](PROJECT-SPECIFICATION.md) — authoritative product & technical specification
 - [AGENTS.md](AGENTS.md) — instructions for coding agents
 - [PROGRESS.md](PROGRESS.md) — implementation tracker & test log

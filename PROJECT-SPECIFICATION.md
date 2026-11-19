@@ -27,7 +27,7 @@ productivity suite (see §14 Out of Scope).
 
 | Method | Inputs | Notes |
 | --- | --- | --- |
-| **Timer** | title, optional description | Start → pause → resume → stop. One active timer per user. Server-side timekeeping via database timestamps; survives refresh & browser closure. Starting a second timer is rejected. |
+| **Timer** | title, optional description | Start → pause → resume → stop → **cancel** (discard without saving). One active timer per user. Server-side timekeeping via database timestamps; survives refresh & browser closure. Starting a second timer is rejected. |
 | **Manual time range** | title, description?, start, end | Duration computed automatically; invalid/negative ranges rejected; overlaps for the same user produce a clear warning the user can explicitly resolve. |
 | **Manual duration** | title, description?, duration | Duration entered as h/m; stored as integer seconds; no timestamps required. |
 
@@ -35,11 +35,25 @@ productivity suite (see §14 Out of Scope).
 
 `id`, `user_id`, `title`, `description`, `entry_type` (`timer` \| `range` \|
 `duration`), `started_at` (nullable), `ended_at` (nullable),
-`duration_seconds`, `occurred_on` (grouping date), `created_at`, `updated_at`.
+`duration_seconds`, `occurred_on` (grouping date), `deleted_at` (soft delete),
+`created_at`, `updated_at`.
 
 Timestamps are stored in **UTC**. `occurred_on` is derived from a
 configurable application timezone. Changing the timezone never silently
-rewrites historical timestamps.
+rewrites historical timestamps. Deleting an activity is a **soft delete**:
+the row stays (audit/recovery) but disappears from every query, report and
+overlap check.
+
+### 2.3 Expenses
+
+A second Home-page entry tab ("Task" / "Expense"). Expenses record **what
+was spent**: `title`, optional `description`, `amount`, and a grouping date.
+Amounts are stored as integer **minor units** (no floating-point money). The
+currency label (e.g. `TMN`, `IRR`, `USD`) is an application-wide admin
+setting shown next to every amount. Expenses support soft delete and the
+same visibility rules as activities (admins / `all_users` see the team;
+everyone else sees only their own). Only the owner can edit or delete an
+expense.
 
 ### 2.4 Projects & tags
 
@@ -59,18 +73,21 @@ rewrites historical timestamps.
 - **Co-doers (co-operators)**: when recording an activity, the creator is
   the **doer/owner** and may attach other signed-in users as co-doers (max
   10). Co-doers see the activity in their own list (marked with the owner's
-  username) read-only; editing and deleting stay with the owner, and time
-  is always attributed to the owner in reports. Timer co-doers chosen at
+  username) and **can edit or delete it**; time is always attributed to the
+  owner in reports, and when a co-doer edits the time range, overlap checks
+  run against the owner's timeline. Timer co-doers chosen at
   start transfer to the resulting activity. CSV export includes a co_doers
   column.
 
 ### 2.5 Reports
 
-Daily / weekly / monthly summaries, custom date range, Admin user filter,
-total duration, activity count, grouping by user, by project and by activity
-title, CSV export (UTF-8, BOM for Excel, proper escaping, Persian-safe,
-respects active filters). Reports respect the configured visibility mode
-(§4).
+Daily / weekly / monthly summaries, custom date range, user filter (admins /
+`all_users`) and project filter (including "no project"), total duration and
+activity count, grouping by user and by project, a **per-day chart fixed to
+the past 7 days** (independent of the selected period), and CSV export
+(UTF-8, BOM for Excel, proper escaping, Persian-safe, respects active
+filters; timestamps exported in UTC). Reports respect the configured
+visibility mode (§4).
 
 ### 2.6 Administration
 
@@ -78,7 +95,8 @@ respects active filters). Reports respect the configured visibility mode
   reset, role assignment. The system must never lose its last active
   administrator (cannot disable/demote self if that would leave no admin).
 - **Application settings**: application name, default language, default
-  timezone, report visibility (`private` | `all_users`).
+  timezone, report visibility (`private` | `all_users`), currency label for
+  expenses, and the display date format (`gregorian` | `jalali`).
 
 ### 2.7 Account settings
 
@@ -94,7 +112,9 @@ Admin creates accounts.
 | --- | :---: | :---: |
 | View all activities / reports | ✅ | own only (or all if visibility = `all_users`) |
 | Create / edit / delete own activities | ✅ | ✅ |
-| Never modify another user's activities | — (enforced) | ✅ enforced |
+| Edit / delete an activity as a **co-doer** | ✅ | ✅ |
+| Expenses: view team-wide | ✅ | own only (or all if visibility = `all_users`) |
+| Never modify another user's activities/expenses (unless co-doer) | — (enforced) | ✅ enforced |
 | Manage users, app settings | ✅ | ❌ |
 | Change own password & preferences | ✅ | ✅ |
 
@@ -154,9 +174,12 @@ reusable later via account settings.
 
 - **Mobile-first**: bottom navigation on mobile, restrained compact
   navigation on desktop; touch-friendly; no horizontal scrolling.
-- **Dashboard** (home after login): compact greeting, prominent activity
-  input, timer controls, manual-entry option, today's total, active-timer
-  indication, recent activities. No big charts, admin widgets, or card grids.
+- **Dashboard** (home after login): compact greeting with today's full date
+  (rendered with the configured Jalali/Gregorian calendar), prominent
+  activity input, timer controls (pause/resume, stop, cancel), manual-entry
+  option, today's total, active-timer indication, recent activities. The
+  entry area is two tabs — **Task** and **Expense**. No big charts, admin
+  widgets, or card grids.
 - **Progressive disclosure**: reports, admin, settings in secondary
   navigation only.
 - **Themes**: light, dark, system; persisted per user; design tokens
@@ -213,12 +236,16 @@ automatic schema sync in production.
 
 ## 8. Database Design
 
-Five tables:
+Tables:
 
 - **users** — id, username (unique), password_hash, role, is_active,
   must_change_password, created_at, updated_at
 - **activities** — id, user_id, title, description, entry_type, started_at,
-  ended_at, duration_seconds, occurred_on, created_at, updated_at
+  ended_at, duration_seconds, occurred_on, deleted_at (soft delete),
+  created_at, updated_at
+- **expenses** — id, user_id, title, description, amount_minor (integer
+  minor units), occurred_on, deleted_at (soft delete), created_at,
+  updated_at
 - **sessions** — id, user_id, token_hash (unique), expires_at, created_at
 - **settings** — key, value, updated_at
 - **timers** — one row per user's active timer: id, user_id (unique),
@@ -253,8 +280,11 @@ GET  /api/setup/status
 GET|POST        /api/activities
 GET|PATCH|DELETE /api/activities/:id
 
-POST /api/timer/start | pause | resume | stop
+POST /api/timer/start | pause | resume | stop | cancel
 GET  /api/timer/active
+
+GET|POST          /api/expenses
+PATCH|DELETE      /api/expenses/:id
 
 GET  /api/reports/summary | daily | weekly | monthly | export
 
@@ -272,7 +302,8 @@ GET|POST          /api/tags
 
 Consistent JSON envelope, Zod validation on every input, standard HTTP
 status codes, pagination (`?page`/`?pageSize`) and filtering (`from`, `to`,
-`q`, `userId`) on lists.
+`q`, `userId`, `projectId` — where `projectId=0` selects entries without a
+project) on lists.
 
 ## 10. Environment Configuration
 
@@ -299,13 +330,25 @@ adapter (in-memory). Production build verification in CI.
 
 ## 13. Deployment
 
-- Cloudflare: `wrangler.jsonc` (D1 binding, assets), migrations via
-  `wrangler d1 migrations`, `npm run deploy`, Git-integration-friendly
-  build command `npm run build`, secrets documented.
+- Cloudflare: the real `wrangler.jsonc` is **generated at deploy time** by
+  `scripts/generate-wrangler.mjs` from the committed template
+  `wrangler.example.jsonc`, using the `D1_DATABASE_ID` build variable
+  (UUID-validated; the generated file is git-ignored). Remote migrations run
+  before every deploy (`npm run deploy` / `npm run deploy:cf`); for the
+  GitHub-integration path the build command is
+  `npm run config:generate && npm run build`, the deploy command is
+  `npm run deploy:cf`, and `D1_DATABASE_ID` must be configured under Workers
+  Builds **build variables and secrets** (it is not visible to the build when
+  configured only as a Worker runtime variable/secret).
+- Secrets (e.g. `INITIAL_ADMIN_PASSWORD`) are Worker secrets and never
+  committed; public configuration (`APP_TIMEZONE`, `DEFAULT_LANGUAGE`,
+  `INITIAL_ADMIN_USERNAME`) lives in the template `vars`.
 - Docker: single container, Node 22, SQLite on `/data/ryty.db` volume,
   healthcheck hitting `/api/health`, restart policy, `.env` config; updates
   never delete data (volume persists).
 - CI (GitHub Actions): install → typecheck → tests → build.
+- Full guide: [deployment-guide.md](./deployment-guide.md)
+  (Persian: [deployment-guide.fa.md](./deployment-guide.fa.md)).
 
 ## 14. Out of Scope
 

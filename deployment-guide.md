@@ -1,247 +1,206 @@
-# RyTy – Cloudflare Deployment Guide
+# RyTy — Cloudflare Deployment Guide
 
-Complete deployment documentation for hosting RyTy on Cloudflare Workers, using Cloudflare D1 as the database and GitHub integration for automated deployments.
+Complete deployment documentation for hosting RyTy on **Cloudflare Workers**
+with **Cloudflare D1** as the database — either manually with Wrangler or
+automatically through Cloudflare Workers Builds (GitHub integration).
+
+**Language:** English · [فارسی](./deployment-guide.fa.md)
+
+---
+
+## Contents
+
+1. [Architecture overview](#1-architecture-overview)
+2. [Which deployment path?](#2-which-deployment-path)
+3. [Prerequisites](#3-prerequisites)
+4. [Get the code](#4-get-the-code)
+5. [Connect Wrangler to Cloudflare](#5-connect-wrangler-to-cloudflare)
+6. [Your D1 database (new or existing)](#6-your-d1-database-new-or-existing)
+7. [The Wrangler configuration template](#7-the-wrangler-configuration-template)
+8. [Environment variables and secrets](#8-environment-variables-and-secrets)
+9. [Database migrations](#9-database-migrations)
+10. [Deploy manually (Wrangler CLI)](#10-deploy-manually-wrangler-cli)
+11. [Deploy with Cloudflare Workers Builds (Git integration)](#11-deploy-with-cloudflare-workers-builds-git-integration)
+12. [First login and the initial administrator](#12-first-login-and-the-initial-administrator)
+13. [Custom domain](#13-custom-domain)
+14. [Production verification checklist](#14-production-verification-checklist)
+15. [Useful commands](#15-useful-commands)
+16. [Database backups](#16-database-backups)
+17. [Schema changes in future releases](#17-schema-changes-in-future-releases)
+18. [Troubleshooting](#18-troubleshooting)
+19. [Local development](#19-local-development)
+20. [Operational rules](#20-operational-rules)
 
 ---
 
 ## 1. Architecture Overview
 
-RyTy uses a single-origin deployment architecture on Cloudflare.
+RyTy is deployed as a single Cloudflare Worker that serves both the REST API
+and the built SPA from one origin, backed by one D1 database.
 
 ```text
                          GitHub Repository
-                         Ryan-PG/RyTy
                                |
                                | Push to main
                                v
                     Cloudflare Workers Builds
                                |
-                               | Build & Deploy
+          1. npm ci            |
+          2. npm run config:generate   (creates wrangler.jsonc from the template)
+          3. npm run build             |
+          4. npm run deploy:cf         |
+             |-- applies remote D1 migrations
+             |-- wrangler deploy
                                v
                     Cloudflare Worker (ryty)
                                |
                   +------------+------------+
                   |                         |
                   v                         v
-            Static Assets               Hono API
-            React + Vite                    |
-                                            |
+            Workers Assets              Hono API
+            (React SPA)                     |
                                             v
                                        Cloudflare D1
-                                       SQLite Database
 ```
 
-### Infrastructure Components
+### Infrastructure components
 
-| Component          | Purpose                                      |
-| ------------------ | -------------------------------------------- |
-| Cloudflare Workers | Runs the backend API                         |
-| Workers Assets     | Serves the frontend application              |
-| Cloudflare D1      | Stores application data                      |
-| Workers Builds     | Automatically builds and deploys from GitHub |
-| Cloudflare Secrets | Stores sensitive configuration               |
-| Cloudflare DNS     | Manages the custom domain                    |
-| Cloudflare SSL     | Provides HTTPS                               |
+| Component          | Purpose                                        |
+| ------------------ | ---------------------------------------------- |
+| Cloudflare Workers | Runs the backend API                           |
+| Workers Assets     | Serves the frontend application                |
+| Cloudflare D1      | Stores application data                        |
+| Workers Builds     | Builds and deploys automatically from GitHub   |
+| Cloudflare Secrets | Stores sensitive runtime configuration         |
+| Cloudflare DNS/SSL | Custom domain and HTTPS                        |
 
-### Why This Architecture?
+### Why this architecture?
 
-- No VPS or dedicated server is required.
-- No Docker installation is required for Cloudflare deployment.
-- Frontend and backend share the same origin.
-- D1 provides persistent database storage.
-- GitHub pushes trigger automatic deployments.
-- Database migrations are automatically applied during deployment.
-- Sensitive configuration stays outside the repository.
+- No VPS, no Docker required for the Cloudflare target.
+- Frontend and backend share the same origin (no CORS, no separate hosting).
+- Every deployment gets its own database configuration; nothing
+  environment-specific is committed to the public repository.
+- Migrations are applied before every deploy, so the schema and the code
+  move together.
 
 ---
 
-## 2. Prerequisites
+## 2. Which deployment path?
 
-Before starting, make sure you have:
+| Path | When to use | Automated? |
+| --- | --- | --- |
+| **Manual (Wrangler CLI)** — §10 | First deployment, or when you prefer explicit control | No |
+| **Cloudflare Workers Builds (Git)** — §11 | Day-to-day: every push to `main` builds and deploys | Yes |
+| **Docker / Node** | Self-hosted servers | See [README.md](./README.md) |
 
-- A Cloudflare account.
-- A GitHub account with access to `Ryan-PG/RyTy`.
-- Node.js 22 installed locally.
-- npm installed.
-- A domain managed by Cloudflare (optional, but recommended).
+All three paths use the same code and the same migration files. The Cloudflare
+paths differ only in *who runs the build* (you or Cloudflare).
 
-### Verify Node.js
+---
 
-Open PowerShell:
+## 3. Prerequisites
+
+- A Cloudflare account (free plan is sufficient).
+- Node.js **22** and npm installed locally.
+- Git (to clone the repository).
+- For the Git-integration path: a GitHub account with access to your RyTy fork/clone.
+
+Verify the Node version:
 
 ```powershell
-node --version
+node --version   # must be 22.x
 npm --version
 ```
 
-Make sure Node.js 22 is available.
+---
 
-### Clone the Repository
+## 4. Get the Code
 
 ```powershell
 git clone https://github.com/Ryan-PG/RyTy.git
 cd RyTy
-```
-
-Install dependencies:
-
-```powershell
 npm install
 ```
 
 ---
 
-## 3. Connect Wrangler to Cloudflare
+## 5. Connect Wrangler to Cloudflare
 
-Wrangler is the Cloudflare CLI used to manage Workers, D1 databases, Secrets, and deployments.
-
-Install it through the project's dependencies or use `npx`.
-
-Authenticate:
+Wrangler is the Cloudflare CLI used to manage Workers, D1 databases, secrets
+and deployments. It ships with the project as a dev dependency — use `npx`.
 
 ```powershell
 npx wrangler login
+npx wrangler whoami   # should print your account
 ```
-
-A browser window opens. Sign in to Cloudflare and authorize Wrangler.
-
-Verify authentication:
-
-```powershell
-npx wrangler whoami
-```
-
-If your Cloudflare account is displayed, authentication is successful.
 
 ---
 
-## 4. Create the Cloudflare D1 Database
+## 6. Your D1 Database (New or Existing)
 
-RyTy uses Cloudflare D1 as its production database.
+### Scenario A — new deployment (your own instance)
 
-### 4.1. Create the Database
-
-Run:
+Create **your own** D1 database:
 
 ```powershell
 npx wrangler d1 create ryty
 ```
 
-Cloudflare returns database information similar to:
+Cloudflare returns:
 
 ```text
 database_name = "ryty"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+database_id  = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
 
-Copy the actual `database_id`.
+Copy the `database_id` — you will need it as the `D1_DATABASE_ID`
+environment variable in the next sections.
 
-### 4.2. Configure wrangler.jsonc
+### Scenario B — existing deployment (upgrading the current instance)
 
-Open the project configuration:
-
-```powershell
-vim wrangler.jsonc
-```
-
-Find the D1 configuration:
-
-```jsonc
-{
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "ryty",
-      "database_id": "YOUR_DATABASE_ID",
-      "migrations_dir": "migrations",
-    },
-  ],
-}
-```
-
-Replace `YOUR_DATABASE_ID` with the actual ID returned by Cloudflare.
-
-Important:
-
-- Keep the binding name as `DB`.
-- Keep the database name as `ryty`.
-- Keep the migrations directory as `migrations`.
-- Do not replace the database ID with the database name.
-
-Save the file.
-
-### 4.3. Verify Database Configuration
-
-Run:
+If a `ryty` database already exists in your account (for example the
+production database), **do not create a new one**. Find its id:
 
 ```powershell
 npx wrangler d1 list
 ```
 
-Make sure the `ryty` database exists.
+and use that id as `D1_DATABASE_ID`.
+
+> **Important:** generating `wrangler.jsonc` never creates a database and
+> never deletes or recreates one. It only points a Worker at the database id
+> you give it. Always make sure the configured id is the database you intend
+> to use — deploying with the wrong id points the Worker at the wrong data.
 
 ---
 
-## 5. Apply Database Migrations
+## 7. The Wrangler Configuration Template
 
-Creating a D1 database does not automatically create application tables.
+The real `wrangler.jsonc` is **not committed** to Git (it is listed in
+`.gitignore` because it contains *your* database id). Instead, the repository
+contains a public template and a small generator:
 
-RyTy uses migration files to create and update the database schema.
+| File | Committed? | Purpose |
+| --- | --- | --- |
+| `wrangler.example.jsonc` | ✅ yes | Template with all shared Worker settings and the placeholder `REPLACE_WITH_YOUR_D1_DATABASE_ID` |
+| `scripts/generate-wrangler.mjs` | ✅ yes | Reads `D1_DATABASE_ID` from the environment, validates it, and writes `wrangler.jsonc` |
+| `wrangler.jsonc` | ❌ no (generated) | The actual configuration used by Wrangler and the Vite/Cloudflare tooling |
 
-### 5.1. Check Migration Files
-
-From the repository root:
-
-```powershell
-Get-ChildItem .\migrations\*.sql
-```
-
-Make sure the migration files are present.
-
-### 5.2. Check Migration Status
-
-```powershell
-npx wrangler d1 migrations list ryty --remote
-```
-
-This checks the migration state of the remote D1 database.
-
-### 5.3. Apply Migrations
-
-```powershell
-npx wrangler d1 migrations apply ryty --remote
-```
-
-Confirm the operation if Wrangler asks for confirmation.
-
-Important:
-
-- Use `--remote` for the production Cloudflare database.
-- Local migrations do not automatically update the remote database.
-- Run migrations before deploying application versions that depend on new schema changes.
-- Do not blindly recreate the database if migrations fail. Inspect the error first.
-
----
-
-## 6. Configure Cloudflare Environment Variables
-
-RyTy reads its Cloudflare configuration through the Worker environment.
-
-The current configuration supports:
-
-| Variable                 | Type     | Description                    |
-| ------------------------ | -------- | ------------------------------ |
-| `INITIAL_ADMIN_USERNAME` | Variable | Initial administrator username |
-| `INITIAL_ADMIN_PASSWORD` | Secret   | Initial administrator password |
-| `APP_TIMEZONE`           | Variable | Application timezone           |
-| `DEFAULT_LANGUAGE`       | Variable | Default application language   |
-
-### 6.1. Configure Public Variables
-
-The `wrangler.jsonc` configuration contains the following default values:
+The template contains (excerpt):
 
 ```jsonc
 {
+  "name": "ryty",
+  "main": "backend/src/runtime/cloudflare.ts",
+  "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ryty",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations",
+    },
+  ],
   "vars": {
     "APP_TIMEZONE": "UTC",
     "DEFAULT_LANGUAGE": "en",
@@ -250,385 +209,219 @@ The `wrangler.jsonc` configuration contains the following default values:
 }
 ```
 
-These are non-sensitive configuration values.
-
-You can change them according to your deployment requirements.
-
-For example:
-
-```jsonc
-{
-  "vars": {
-    "APP_TIMEZONE": "Asia/Baku",
-    "DEFAULT_LANGUAGE": "en",
-    "INITIAL_ADMIN_USERNAME": "admin",
-  },
-}
-```
-
-Use a valid IANA timezone identifier.
-
-### 6.2. Configure the Initial Admin Password
-
-The initial administrator password must never be committed to GitHub.
-
-Use Cloudflare Secrets:
+### Generating the configuration
 
 ```powershell
-npx wrangler secret put INITIAL_ADMIN_PASSWORD
+# PowerShell
+$env:D1_DATABASE_ID = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+npm run config:generate
 ```
 
-Wrangler asks you to enter the secret value.
+```bash
+# bash
+D1_DATABASE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx npm run config:generate
+```
 
-Enter your desired initial administrator password.
+The generator:
 
-The value is stored as a Worker Secret and is not exposed in the repository.
+1. Reads `D1_DATABASE_ID` from `process.env`.
+2. Validates that it is present and a valid UUID.
+3. Replaces the placeholder in `wrangler.example.jsonc`.
+4. Writes the result to `wrangler.jsonc` in the project root.
 
-**Important:**
+If `D1_DATABASE_ID` is missing, the generator fails with
+`D1_DATABASE_ID environment variable is missing.` If the value is not a UUID,
+it fails with `D1_DATABASE_ID is not a valid UUID.` In both cases no output
+file is written.
 
-Do not:
-
-- Put the password in `wrangler.jsonc`.
-- Put the production password in `.env` and commit it.
-- Add the password to GitHub Actions or repository files as plain text.
-- Hash the password manually before registering the Secret.
-
-The application hashes the password when creating the administrator account.
+> **Do not commit the generated `wrangler.jsonc`.** It contains your
+> environment-specific database id. Also never put secrets in it — secrets
+> belong in the Worker's secret store (§8).
 
 ---
 
-## 7. Initial Administrator Bootstrap
+## 8. Environment Variables and Secrets
 
-RyTy supports creating the initial administrator through the login endpoint.
+There are three distinct places where configuration lives. Mixing them up is
+the most common deployment mistake:
 
-This process is important because registering a Cloudflare Secret alone does not create a user account.
+| Where | Visible during | Used for | Examples |
+| --- | --- | --- | --- |
+| **Build variables** (Workers Builds → Build variables and secrets, or your local shell) | The build process only | Generating `wrangler.jsonc` | `D1_DATABASE_ID` |
+| **Worker runtime variables** (`vars` in `wrangler.jsonc`, or the Worker's Variables settings) | The deployed Worker | Public, non-sensitive configuration | `APP_TIMEZONE`, `DEFAULT_LANGUAGE`, `INITIAL_ADMIN_USERNAME` |
+| **Worker runtime secrets** (`npx wrangler secret put …`) | The deployed Worker | Sensitive values | `INITIAL_ADMIN_PASSWORD` |
 
-### 7.1. Bootstrap Logic
+**Critical:** `D1_DATABASE_ID` **must be configured as a build variable**.
+A Worker runtime variable or runtime secret is *not* available to the build
+process — `scripts/generate-wrangler.mjs` runs during the build and reads
+`process.env.D1_DATABASE_ID`. Setting it only under the Worker's runtime
+Variables/Secrets will make the build fail with
+`D1_DATABASE_ID environment variable is missing.`
 
-The current implementation follows this process:
+| Variable | Kind | Where | Purpose |
+| --- | --- | --- | --- |
+| `D1_DATABASE_ID` | Build variable/secret | Workers Builds build variables (or your shell for manual deploys) | Your D1 database id; injected into the generated `wrangler.jsonc` |
+| `INITIAL_ADMIN_PASSWORD` | Worker **secret** | `npx wrangler secret put INITIAL_ADMIN_PASSWORD` | Bootstrap admin password; used only until first login, then a change is forced |
+| `INITIAL_ADMIN_USERNAME` | Worker var | `vars` in the template (default `admin`) | Bootstrap admin username |
+| `APP_TIMEZONE` | Worker var | `vars` in the template (default `UTC`) | Fallback timezone for day grouping; changeable later in Admin → Settings |
+| `DEFAULT_LANGUAGE` | Worker var | `vars` in the template (default `en`) | Default UI language `en` \| `fa` |
 
-1. A user submits a login request.
-2. The backend checks the number of active administrators.
-3. If no active administrator exists, it checks whether `INITIAL_ADMIN_PASSWORD` is configured.
-4. It compares the submitted username and password with the configured bootstrap credentials.
-5. If both match, it creates the initial administrator.
-6. The password is hashed using PBKDF2-SHA256 with a random salt.
-7. The password hash is stored in D1.
-8. The administrator is created with `mustChangePassword = true`.
-9. The login process continues and verifies the newly created account.
+In-app settings (Admin → Settings) — application name, default language,
+timezone, report visibility, **currency**, **date format (Gregorian/Jalali)** —
+are stored in the database and take precedence over the environment
+fallbacks once changed.
 
-### 7.2. Initial Login
-
-Open the deployed application.
-
-Use:
-
-```text
-Username: admin
-Password: Your INITIAL_ADMIN_PASSWORD value
-```
-
-The username is configurable through `INITIAL_ADMIN_USERNAME`. If it is not configured, the default is `admin`.
-
-### 7.3. Mandatory Password Change
-
-The initial administrator must change the password after logging in.
-
-The application uses the following behavior:
-
-- Initial password is used only for the bootstrap process.
-- The new password is hashed before being stored.
-- `mustChangePassword` becomes `false`.
-- The new password is used for subsequent logins.
-
-### 7.4. Important Bootstrap Notes
-
-The initial password Secret is not automatically deleted after account creation.
-
-However, the application checks whether an active administrator already exists before attempting bootstrap.
-
-The bootstrap process also refuses to create an account if the configured username already belongs to an existing account.
-
-If an administrator already exists, changing the Cloudflare Secret does not reset that administrator's password.
-
-For password recovery, use the application's administrator password reset functionality.
+Docker/local deployments use the same names in `.env` — see
+[README.md](./README.md#️-environment-variables).
 
 ---
 
-## 8. First Manual Deployment
+## 9. Database Migrations
 
-Before configuring automatic GitHub deployments, you can deploy the application manually.
-
-The project provides deployment scripts.
-
-### 8.1. Build and Deploy
-
-Run:
+Migration files live in [`migrations/`](./migrations) as plain SQL, shared by
+D1 and SQLite. The migrations directory is configured through the
+`migrations_dir` property of the D1 binding in the Wrangler template
+(`"migrations"`).
 
 ```powershell
+# Check what is pending on the remote database
+npx wrangler d1 migrations list ryty --remote
+
+# Apply pending migrations to the remote (production) database
+npx wrangler d1 migrations apply ryty --remote
+```
+
+Notes:
+
+- Wrangler tracks applied migrations; re-running applies nothing new.
+- `--local` applies to the local development D1 (§19), not production.
+- `npm run deploy` and `npm run deploy:cf` run remote migrations
+  automatically **before** deploying the Worker. If a migration fails, the
+  deploy command stops and the new Worker is **not** deployed.
+- To avoid touching the wrong database, always check
+  `npx wrangler d1 list` and confirm the id you configured in
+  `D1_DATABASE_ID` before applying anything with `--remote`.
+- Never recreate the database to "fix" a failed migration. Inspect the error
+  first (see §18).
+
+---
+
+## 10. Deploy Manually (Wrangler CLI)
+
+### 10.1 One-shot deploy (recommended for the first deploy)
+
+```powershell
+# with D1_DATABASE_ID set in your shell
 npm run deploy
 ```
 
-The deployment script executes the following steps:
+`npm run deploy` runs, in order:
 
 ```text
-1. Build the complete application
-          |
-          v
-2. Apply pending remote D1 migrations
-          |
-          v
-3. Deploy the Worker
+npm run config:generate   → creates wrangler.jsonc from the template
+npm run build             → builds client + server bundle
+npm run db:migrate:d1:remote → applies pending remote D1 migrations
+wrangler deploy           → uploads the Worker and assets
 ```
 
-The corresponding commands are:
+### 10.2 Partial commands
+
+| Command | Steps | Typical use |
+| --- | --- | --- |
+| `npm run config:generate` | generate `wrangler.jsonc` | after changing `D1_DATABASE_ID` or the template |
+| `npm run build` | client + server build | verify a build locally |
+| `npm run deploy:cf` | remote migrations + `wrangler deploy` | config already generated, code rebuilt |
+| `npm run deploy:cf-only` | `wrangler deploy` only | emergency redeploy; **skips migrations** — only when the remote schema is already compatible |
+
+### 10.3 Verify the deployment
 
 ```powershell
-npm run build
-npm run db:migrate:d1:remote
-npx wrangler deploy
+curl https://ryty.<your-subdomain>.workers.dev/api/health
 ```
 
-If a migration fails, the deployment stops and the new Worker is not deployed.
-
-Wrangler uploads the Worker and its configured assets to Cloudflare.
-
-### 8.2. Deployment URL
-
-After a successful deployment, Cloudflare provides a URL similar to:
-
-```text
-https://ryty.<your-cloudflare-subdomain>.workers.dev
-```
-
-Open this URL to verify the application.
-
-### 8.3. Verify API Health
-
-Open:
-
-```text
-https://ryty.<your-cloudflare-subdomain>.workers.dev/api/health
-```
-
-Expected response:
+Expected:
 
 ```json
-{
-  "data": {
-    "status": "ok",
-    "database": "ok"
-  }
-}
+{ "data": { "status": "ok", "database": "ok" } }
 ```
 
-This confirms that the Worker can access the database.
+`"database": "ok"` confirms the Worker can reach its D1 database.
 
 ---
 
-## 9. Connect GitHub to Cloudflare
+## 11. Deploy with Cloudflare Workers Builds (Git Integration)
 
-Once the initial infrastructure is configured, GitHub can manage future deployments.
+After the first manual deployment (or straight away, if you prefer), connect
+the repository so every push to `main` builds and deploys automatically.
 
-This replaces the need to run manual deployments for every code change.
+### 11.1 Connect the repository
 
-### 9.1. Open Cloudflare Dashboard
+1. Cloudflare Dashboard → **Workers & Pages** → create/connect via the Git
+   integration (Workers Builds) workflow.
+2. Select **GitHub** as the source provider and authorize Cloudflare.
+3. Select the repository (e.g. `Ryan-PG/RyTy`) and the production branch
+   `main`.
 
-Navigate to:
+### 11.2 Build configuration
 
-```text
-Cloudflare Dashboard
-    → Workers & Pages
-```
+| Setting | Value |
+| --- | --- |
+| Worker name | `ryty` |
+| Production branch | `main` |
+| Root directory | `/` (repository root) |
+| Install command | `npm ci` (default) |
+| **Build command** | `npm run config:generate && npm run build` |
+| **Deploy command** | `npm run deploy:cf` |
 
-Choose the Git integration / Workers Builds workflow.
+The build command **must** run `config:generate` first: every step that uses
+Wrangler (the Vite Cloudflare build and `wrangler deploy`) needs the
+generated `wrangler.jsonc`. The deploy command then applies pending remote
+migrations before `wrangler deploy`.
 
-### 9.2. Connect GitHub
+### 11.3 Configure `D1_DATABASE_ID` as a build variable
 
-1. Select GitHub as the source provider.
-2. Authorize Cloudflare to access your GitHub account.
-3. Select the repository:
-
-```text
-Ryan-PG/RyTy
-```
-
-4. Select the production branch:
-
-```text
-main
-```
-
-### 9.3. Configure Build Settings
-
-The deployment scripts in `package.json` should include:
-
-```json
-{
-  "scripts": {
-    "dev": "vite",
-    "dev:node": "tsx --env-file-if-exists=.env backend/src/runtime/node.ts",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "vite build",
-    "build:server": "node scripts/build-server.mjs",
-    "start": "node --env-file-if-exists=.env dist/server/server.mjs",
-    "preview": "npm run build && npm run start",
-    "typecheck": "tsc -p frontend/tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit && tsc -p backend/tsconfig.node.json --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
-    "db:migrate:d1:local": "wrangler d1 migrations apply ryty --local",
-    "db:migrate:d1:remote": "wrangler d1 migrations apply ryty --remote",
-    "deploy": "npm run build && npm run db:migrate:d1:remote && wrangler deploy",
-    "deploy:cf": "npm run db:migrate:d1:remote && wrangler deploy",
-    "deploy:cf-only": "wrangler deploy"
-  }
-}
-```
-
-The Cloudflare Workers Builds settings must be configured as follows:
-
-| Setting           | Value               |
-| ----------------- | ------------------- |
-| Worker name       | `ryty`              |
-| Production branch | `main`              |
-| Root directory    | `/`                 |
-| Install command   | `npm ci`            |
-| Build command     | `npm run build`     |
-| Deploy command    | `npm run deploy:cf` |
-| Node.js version   | `22`                |
-
-**Important:**
-
-The Build command and Deploy command have separate responsibilities.
-
-The Build command:
-
-```powershell
-npm run build
-```
-
-Builds both the client and server.
-
-The Deploy command:
-
-```powershell
-npm run deploy:cf
-```
-
-Executes:
-
-```powershell
-npm run db:migrate:d1:remote
-npx wrangler deploy
-```
-
-Do not use `npm run deploy` as the Cloudflare Deploy command because it runs the build again.
-
-This configuration avoids duplicate builds.
-
-### 9.4. Important: Existing Worker and Database
-
-The GitHub deployment must use the existing Worker configuration.
-
-Make sure:
-
-- The Worker name remains `ryty`.
-- The same `wrangler.jsonc` is used.
-- The existing D1 database ID is preserved.
-- The D1 binding remains `DB`.
-- The existing Secrets are configured for the production Worker.
-
-**Important note about `wrangler.jsonc` and Git:**
-
-If `wrangler.jsonc` is marked with:
-
-```powershell
-git update-index --skip-worktree wrangler.jsonc
-```
-
-GitHub and Cloudflare Workers Builds cannot see your local-only changes.
-
-Cloudflare checks out the version committed to GitHub, not the modified version on your computer.
-
-Therefore:
-
-- The committed version of `wrangler.jsonc` must already contain the correct production Worker configuration.
-- The production D1 `database_id` must be correct in the committed configuration.
-- The `DB` binding must be correct.
-- The migrations directory must be configured correctly.
-- The required assets and entry-point settings must be present.
-
-If your local configuration contains changes that are missing from the committed version, Cloudflare will not receive them.
-
-Do not assume that `skip-worktree` synchronizes local configuration with Cloudflare.
-
-**Never put production passwords or other sensitive Secrets in `wrangler.jsonc`.**
-
-If the dashboard workflow creates a new Worker instead of connecting the existing deployment, stop and verify the resource configuration before proceeding.
-
-### 9.5. Configure Production Secrets
-
-Check the Worker environment after connecting GitHub.
-
-Make sure the production Worker has:
+In the Workers Builds configuration for the Worker, under **Build variables
+and secrets**, add:
 
 ```text
-INITIAL_ADMIN_PASSWORD
+D1_DATABASE_ID = <your-d1-database-id>
 ```
 
-configured as a Secret.
-
-Also verify the required public variables:
+This is **not** the same place as the Worker's runtime Variables/Secrets —
+the build process cannot see runtime values. The build sequence is:
 
 ```text
-INITIAL_ADMIN_USERNAME
-APP_TIMEZONE
-DEFAULT_LANGUAGE
+1. Cloudflare starts the build, injecting build variables into the environment
+2. npm run config:generate   → reads D1_DATABASE_ID, writes wrangler.jsonc
+3. npm run build             → client + server bundle
+4. npm run deploy:cf         → remote D1 migrations → wrangler deploy
 ```
 
-Do not assume that connecting GitHub automatically transfers the existing Worker configuration.
+### 11.4 Production secrets and runtime variables
 
----
+The deployed Worker still needs its runtime configuration — these are *not*
+transferred from your machine or from the build:
 
-## 10. Automatic Deployment Workflow
+- `INITIAL_ADMIN_PASSWORD` as a Worker **secret**:
+  `npx wrangler secret put INITIAL_ADMIN_PASSWORD`
+- `APP_TIMEZONE`, `DEFAULT_LANGUAGE`, `INITIAL_ADMIN_USERNAME` as Worker
+  `vars` (the generated `wrangler.jsonc` already includes the defaults; keep
+  them, or adjust them in the template before generating).
 
-After GitHub integration is configured, the deployment process becomes:
+### 11.5 Existing Worker / existing database
 
-```text
-Developer
-    |
-    | git push origin main
-    v
-GitHub Repository
-    |
-    | Push event
-    v
-Cloudflare Workers Builds
-    |
-    | Install dependencies
-    v
-npm ci
-    |
-    | Build command
-    v
-npm run build
-    |
-    | Deploy command
-    v
-npm run db:migrate:d1:remote
-    |
-    | If migrations succeed
-    v
-wrangler deploy
-    |
-    v
-Production Worker
-```
+When connecting Git integration to an already-running deployment:
 
-### 10.1. Deploy New Changes
+- Keep the Worker name `ryty` so you update the existing Worker instead of
+  creating a new one.
+- Use the **existing** production database id as `D1_DATABASE_ID` — do not
+  create a new database for ongoing deployments.
+- Keep the `DB` binding name, database name `ryty` and `migrations_dir` as in
+  the template.
+- If the dashboard workflow tries to create a *new* Worker instead of
+  updating the existing one, stop and verify the configuration first.
 
-From your local project:
+### 11.6 Day-to-day deploys
 
 ```powershell
 git add .
@@ -636,548 +429,240 @@ git commit -m "Update application"
 git push origin main
 ```
 
-Cloudflare detects the push and starts a new deployment.
-
-### 10.2. Monitor Deployment
-
-Navigate to:
-
-```text
-Cloudflare Dashboard
-    → Workers & Pages
-    → ryty
-    → Deployments
-```
-
-Check:
-
-- Build status.
-- Deployment status.
-- Build logs.
-- Migration output.
-- Deployment errors.
-
-### 10.3. Automatic Database Migrations
-
-Database migrations are now part of the automated deployment process.
-
-Whenever you push changes to the production branch:
-
-1. Cloudflare installs dependencies.
-2. Cloudflare builds the application.
-3. The Deploy command applies pending remote D1 migrations.
-4. If migrations succeed, Wrangler deploys the Worker.
-5. The updated application becomes available.
-
-Wrangler tracks applied migrations and does not reapply successfully recorded migrations.
-
-If no new migrations exist, no new schema changes are applied.
-
-If a migration fails, the Deploy command stops and the new Worker is not deployed.
-
-**Important:** A successful deployment does not mean that every application-level issue has been ruled out. Always verify production health after deployment.
-
-### 10.4. Manual Deployment Is No Longer Required
-
-After GitHub integration is working, normal application updates should be deployed through GitHub.
-
-You do not need to run:
-
-```powershell
-npm run deploy
-```
-
-for every code change.
-
-Keep Wrangler installed locally for database management, migrations, debugging, and administrative operations.
+Cloudflare builds and deploys automatically. Monitor progress under
+**Workers & Pages → ryty → Deployments** (build logs, deploy logs, migration
+output). Manual `npm run deploy` is no longer needed for normal changes.
 
 ---
 
-## 11. Configure a Custom Domain
+## 12. First Login and the Initial Administrator
 
-Cloudflare provides a default `workers.dev` URL.
+Setting the `INITIAL_ADMIN_PASSWORD` secret does **not** create an account by
+itself. The account is created on the first login attempt that matches the
+bootstrap configuration:
 
-For production, a custom domain is recommended.
+1. Open the deployed application.
+2. Sign in with the configured username (default `admin`) and the
+   `INITIAL_ADMIN_PASSWORD` value.
+3. The backend detects that no active administrator exists and that the
+   submitted credentials match the configured bootstrap values, then creates
+   the administrator (password hashed with PBKDF2-SHA256, 100 000 iterations,
+   per-user salt) and continues the login.
+4. The application **forces a password change** before anything else can be
+   used. The bootstrap password is never valid again after that.
 
-Example:
+Notes:
 
-```text
-ryty.ryanheida.com
-```
-
-### 11.1. Add the Custom Domain
-
-Navigate to:
-
-```text
-Cloudflare Dashboard
-    → Workers & Pages
-    → ryty
-    → Settings
-    → Domains & Routes
-    → Add
-    → Custom Domain
-```
-
-Enter:
-
-```text
-ryty.ryanheida.com
-```
-
-Cloudflare manages the required DNS configuration and provisions the SSL certificate.
-
-### 11.2. Important Requirements
-
-- The domain's DNS zone must be active in the same Cloudflare account.
-- The custom domain must be attached to the intended Worker.
-- Wait for DNS and SSL provisioning to finish.
-
-### 11.3. Verify the Domain
-
-Open:
-
-```text
-https://ryty.ryanheida.com
-```
-
-Check:
-
-```text
-https://ryty.ryanheida.com/api/health
-```
-
-The application should work over HTTPS.
+- Bootstrap is idempotent: it only runs while no active administrator exists.
+- Changing the secret later does **not** reset an existing administrator's
+  password. Use Admin → Users → Reset password for that.
+- If the secret is missing, the application shows a setup screen with the
+  exact command instead of ever using an insecure default.
 
 ---
 
-## 12. Production Verification Checklist
+## 13. Custom Domain
 
-After deployment, verify the following functionality.
+Cloudflare provides a `*.workers.dev` URL. For production, attach a custom
+domain:
+
+1. Cloudflare Dashboard → Workers & Pages → `ryty` → **Settings** →
+   **Domains & Routes** → **Add** → **Custom domain**.
+2. Enter the domain (e.g. `ryty.example.com`). The DNS zone must be active in
+   the same Cloudflare account.
+3. Wait for DNS and SSL provisioning, then verify:
+
+```text
+https://<your-domain>/            → the app
+https://<your-domain>/api/health  → {"data":{"status":"ok","database":"ok"}}
+```
+
+---
+
+## 14. Production Verification Checklist
 
 ### Infrastructure
 
-- [ ] Worker `ryty` is deployed.
-- [ ] Workers Assets serves the frontend.
-- [ ] D1 database is accessible.
-- [ ] Database migrations are applied.
-- [ ] Production Secrets are configured.
-- [ ] Custom domain works.
-- [ ] HTTPS works correctly.
-- [ ] GitHub automatic deployment works.
-- [ ] Cloudflare Build command is `npm run build`.
-- [ ] Cloudflare Deploy command is `npm run deploy:cf`.
-
-### Authentication
-
-- [ ] Setup status endpoint works.
-- [ ] Initial administrator can be created.
-- [ ] Initial login works.
-- [ ] Mandatory password change works.
-- [ ] New password works after changing it.
-- [ ] Invalid credentials are rejected.
-- [ ] Inactive users cannot log in.
+- [ ] Worker `ryty` is deployed (not a new Worker with a similar name).
+- [ ] The frontend loads from the same origin.
+- [ ] `/api/health` returns `"database": "ok"`.
+- [ ] Pending migrations are applied (`d1 migrations list ryty --remote`).
+- [ ] `D1_DATABASE_ID` is present in Workers Builds **build variables**.
+- [ ] `INITIAL_ADMIN_PASSWORD` is configured as a Worker **secret**.
+- [ ] Custom domain works over HTTPS (if used).
 
 ### Application
 
-- [ ] Dashboard loads.
-- [ ] User management works.
-- [ ] Project management works.
-- [ ] Timer starts and stops correctly.
-- [ ] Manual activity entries work.
-- [ ] Reports load correctly.
-- [ ] CSV export works.
-- [ ] User preferences persist.
-- [ ] Persian and English interfaces work.
-- [ ] Data persists after redeployment.
+- [ ] Bootstrap admin can log in and is forced to change the password.
+- [ ] Timer start/pause/resume/stop and cancel work.
+- [ ] Manual time-range and duration entries work; overlap warning appears.
+- [ ] Expenses can be added, edited and deleted; the currency shows correctly.
+- [ ] Reports load for daily/weekly/monthly/custom; the per-day chart shows
+      exactly the past 7 days.
+- [ ] CSV export downloads a valid UTF-8 file.
+- [ ] Date format setting (Gregorian/Jalali) renders accordingly.
+- [ ] Persian and English interfaces work (RTL/LTR).
+- [ ] Data survives a redeploy (activities, expenses, users).
 
 ### Security
 
-- [ ] Initial password is not committed to GitHub.
-- [ ] Password hashes are stored instead of plaintext passwords.
-- [ ] Authentication is enforced by the backend.
-- [ ] Admin endpoints require administrator privileges.
-- [ ] Password changes revoke other sessions.
-- [ ] Login rate limiting works.
+- [ ] The initial password is not committed to Git.
+- [ ] Invalid logins are rejected; inactive users cannot sign in.
+- [ ] Admin endpoints require the admin role.
+- [ ] Users cannot read or mutate other users' activities or expenses.
 
 ---
 
-## 13. Useful Cloudflare Commands
+## 15. Useful Commands
 
-All commands below are intended to run from the repository root.
-
-### Authentication
+All commands run from the repository root.
 
 ```powershell
+# Authentication
 npx wrangler login
 npx wrangler whoami
-```
+npx wrangler --version
 
-### Database Management
-
-List databases:
-
-```powershell
+# D1 databases
 npx wrangler d1 list
-```
-
-Check migrations:
-
-```powershell
+npx wrangler d1 create ryty
 npx wrangler d1 migrations list ryty --remote
-```
-
-Apply migrations:
-
-```powershell
 npx wrangler d1 migrations apply ryty --remote
-```
-
-### Inspect Database Tables
-
-```powershell
 npx wrangler d1 execute ryty --remote --command "SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name;"
-```
 
-### Update Initial Admin Secret
-
-```powershell
+# Secrets
 npx wrangler secret put INITIAL_ADMIN_PASSWORD
-```
 
-Remember: updating this Secret does not reset an existing administrator's password.
-
-### Deploy Manually
-
-Complete local build, migration, and deployment:
-
-```powershell
+# Build & deploy
+npm run config:generate
+npm run build
 npm run deploy
-```
-
-Deploy without rebuilding:
-
-```powershell
 npm run deploy:cf
-```
-
-Deploy without applying migrations:
-
-```powershell
 npm run deploy:cf-only
 ```
 
-**Warning:** `deploy:cf-only` intentionally skips database migrations. Use it only when you have verified that the production database schema is already compatible with the application being deployed.
-
-### Inspect Wrangler Version
-
-```powershell
-npx wrangler --version
-```
-
 ---
 
-## 14. Database Backup
-
-D1 supports database export.
-
-Create a backup:
+## 16. Database Backups
 
 ```powershell
 npx wrangler d1 export ryty --remote --output=./ryty-backup.sql
 ```
 
-The resulting file:
-
-```text
-ryty-backup.sql
-```
-
-contains database data.
-
-Important:
-
-- Never commit production database backups to GitHub.
-- Keep backups in a secure location.
-- Restrict access to backup files.
-- Test restoration procedures before relying on backups.
-
-For a production system, establish a regular backup strategy instead of relying on manual exports.
+- Never commit backups to Git; keep them in secure storage.
+- Test restoration before relying on backups.
+- For production use, schedule regular exports instead of ad-hoc copies.
 
 ---
 
-## 15. Database Migrations During Future Updates
+## 17. Schema Changes in Future Releases
 
-Database migrations are automatically executed during Cloudflare deployment.
-
-For a release that changes the database schema, use this recommended workflow:
+Migrations run automatically before every deploy (manual and Git-integrated).
+Recommended workflow:
 
 ```text
-1. Create migration files locally
-          |
-          v
-2. Review migration SQL
-          |
-          v
-3. Test migrations against local D1
-          |
-          v
-4. Commit migration files to Git
-          |
-          v
-5. Push changes to GitHub
-          |
-          v
-6. Cloudflare builds the application
-          |
-          v
-7. Cloudflare applies pending remote migrations
-          |
-          v
-8. Cloudflare deploys the Worker
-          |
-          v
-9. Verify production application
+1. Create the migration (npm run db:generate, then review the SQL)
+2. Test locally (npm run db:migrate:d1:local)
+3. Commit the migration file with the code that uses it
+4. Push → Cloudflare applies pending remote migrations, then deploys
+5. Verify /api/health and the affected features
 ```
 
-### 15.1. Generate Migrations
+Safety rules:
 
-Use:
+- Prefer backward-compatible migrations (add columns/tables before code uses
+  them; remove old structures only after no deployed code depends on them).
+- Never rename or drop columns without a compatibility plan
+  (SQLite/D1 have no `ALTER COLUMN`).
+- Back up the database before risky schema changes.
+
+---
+
+## 18. Troubleshooting
+
+| Problem | Explanation and fix |
+| --- | --- |
+| **No configuration file found** (`wrangler.jsonc` missing) | The generation step did not run or failed. Run `npm run config:generate` (locally with `D1_DATABASE_ID` set) or make sure the Workers Builds build command includes it. |
+| **`D1_DATABASE_ID environment variable is missing.`** | The generator ran without the variable. For manual deploys set it in your shell; for Workers Builds set it under **Build variables and secrets** — runtime variables/secrets are *not* visible to the build. |
+| **`D1_DATABASE_ID is not a valid UUID.`** | The configured id is malformed. Copy the exact `database_id` from `npx wrangler d1 create` / `npx wrangler d1 list`. |
+| **Database not found / binding errors** | The id points to a database in another account, or the database was deleted. Verify `npx wrangler d1 list` and the configured id. |
+| **Migration fails** | Inspect the SQL and the current remote schema (`d1 migrations list ryty --remote`, `d1 execute …`). Do not recreate the database. The deploy command stops before deploying when migrations fail. |
+| **Worker deploy fails** | Check the build output, the generated `wrangler.jsonc`, Wrangler permissions and the Cloudflare deploy logs. |
+| **Secret unavailable at runtime** (setup screen keeps appearing) | `INITIAL_ADMIN_PASSWORD` was not configured as a **Worker secret** — `npx wrangler secret put INITIAL_ADMIN_PASSWORD`, then redeploy if needed. Build variables do not count. |
+| **Login fails although the secret is set** | An administrator may already exist (bootstrap only runs when none exists), the username may differ from `INITIAL_ADMIN_USERNAME`, or the password does not match. Check `/api/setup/status` — it reports `adminExists`/`bootstrapConfigured` without exposing secrets. |
+| **New deployment created instead of updating the existing Worker** | The Workers Builds workflow was pointed at a different Worker name or account. Stop, delete nothing, and reconnect with the correct name/credentials. |
+
+---
+
+## 19. Local Development
+
+Local development uses the same Cloudflare toolchain (Vite + Workers runtime +
+local D1) and therefore needs a generated `wrangler.jsonc` too — but **no**
+real database or production configuration:
 
 ```powershell
-npm run db:generate
-```
+# 1. Generate a local wrangler.jsonc — any valid UUID works for local D1.
+#    (PowerShell)
+$env:D1_DATABASE_ID = "00000000-0000-0000-0000-000000000000"
+npm run config:generate
 
-This generates migration files based on the Drizzle configuration.
-
-Review the generated SQL before deploying.
-
-### 15.2. Test Migrations Locally
-
-```powershell
+# 2. Create the local D1 schema
 npm run db:migrate:d1:local
+
+# 3. Configure the local bootstrap admin (.dev.vars, git-ignored)
+#    INITIAL_ADMIN_USERNAME=admin
+#    INITIAL_ADMIN_PASSWORD=choose-a-long-password
+
+# 4. Run the dev server (Vite + Cloudflare Workers runtime)
+npm run dev
 ```
 
-Make sure the local database schema is correct.
+The local `D1_DATABASE_ID` never touches production — local development only
+reads/writes the local D1 simulator under `.wrangler/`. Never use your real
+production database id for local work.
 
-### 15.3. Deploy Through GitHub
-
-Commit the application changes and migration files:
+The Docker/Node target can also be run locally:
 
 ```powershell
-git add .
-git commit -m "Update database schema"
-git push origin main
-```
-
-Cloudflare automatically applies the pending remote migrations before deploying the new Worker.
-
-### 15.4. Production Migration Safety
-
-For production schema changes:
-
-- Prefer backward-compatible migrations.
-- Avoid removing columns while the currently deployed application still depends on them.
-- Avoid renaming columns without a compatibility strategy.
-- Review generated SQL before deployment.
-- Back up production data before high-risk schema changes.
-- Verify application health after deployment.
-
-For breaking schema changes, use the Expand/Contract migration pattern:
-
-1. Add new columns or tables without removing old ones.
-2. Deploy application code compatible with both old and new structures.
-3. Migrate existing data.
-4. Update application code to use the new structure.
-5. Remove obsolete structures only after confirming that no deployed code depends on them.
-
-This reduces deployment risks when the application and database schema are updated separately.
-
----
-
-## 16. Troubleshooting
-
-### Problem: Database is unavailable
-
-Check:
-
-- `database_id` in `wrangler.jsonc`.
-- D1 binding name.
-- Database existence.
-- Migration status.
-- Worker deployment logs.
-
-### Problem: Initial Admin Login Fails
-
-Open:
-
-```text
-https://ryty.ryanheida.com/api/setup/status
-```
-
-Inspect the response.
-
-Relevant fields:
-
-| Field                 | Meaning                                   |
-| --------------------- | ----------------------------------------- |
-| `adminExists`         | Whether an active administrator exists    |
-| `bootstrapConfigured` | Whether an initial password is configured |
-| `bootstrapUsername`   | Configured initial administrator username |
-
-Possible causes:
-
-- The Secret is missing from the production Worker.
-- The submitted username does not match the configured username.
-- The submitted password does not match the Secret.
-- An active administrator already exists.
-- An existing account already uses the configured bootstrap username.
-
-The setup endpoint does not expose the password or its hash.
-
-### Problem: GitHub Deployment Fails
-
-Check:
-
-- Node.js version is 22.
-- Install command is `npm ci`.
-- Build command is `npm run build`.
-- Deploy command is `npm run deploy:cf`.
-- The repository root directory is correct.
-- `wrangler.jsonc` exists in the GitHub repository.
-- The committed `wrangler.jsonc` contains the correct production configuration.
-- The D1 database ID is valid.
-- The `DB` binding is correct.
-- The migration directory exists.
-- The Cloudflare Worker has access to the required production resources.
-
-Inspect the Cloudflare build logs for the exact error.
-
-### Problem: Migration Fails
-
-Check:
-
-- Migration SQL syntax.
-- Migration file naming and ordering.
-- D1 database availability.
-- Whether the migration has already been applied.
-- Whether the migration depends on an existing table or column.
-- Whether the migration is compatible with the current production schema.
-
-Do not manually edit migration history to bypass an error without understanding the consequences.
-
-If migration fails, the deployment command should stop before deploying the new Worker.
-
-### Problem: Worker Deploys but UI Does Not Load
-
-Check:
-
-- Vite build output.
-- Workers Assets configuration.
-- Asset directory configuration in `wrangler.jsonc`.
-- Worker entry point.
-- Cloudflare deployment logs.
-- Browser console and network errors.
-
-Make sure the `npm run build` command generates all assets expected by the Worker configuration.
-
-### Problem: Custom Domain Does Not Work
-
-Check:
-
-- The domain is active in Cloudflare.
-- The custom domain is attached to Worker `ryty`.
-- DNS provisioning is complete.
-- SSL certificate provisioning is complete.
-
----
-
-## 17. Final Production Architecture
-
-The intended production configuration is:
-
-| Resource               | Configuration             |
-| ---------------------- | ------------------------- |
-| Source Repository      | `Ryan-PG/RyTy`            |
-| Production Branch      | `main`                    |
-| Cloudflare Worker      | `ryty`                    |
-| Frontend               | Workers Assets            |
-| Backend                | Hono on Workers           |
-| Database               | Cloudflare D1             |
-| Database Binding       | `DB`                      |
-| Database Name          | `ryty`                    |
-| Build System           | Cloudflare Workers Builds |
-| Build Command          | `npm run build`           |
-| Deploy Command         | `npm run deploy:cf`       |
-| Deployment Trigger     | Push to `main`            |
-| Runtime                | Cloudflare Workers        |
-| Custom Domain          | `ryty.ryanheida.com`      |
-| Initial Admin Username | `admin` by default        |
-| Initial Admin Password | Cloudflare Secret         |
-
-### Deployment Responsibilities
-
-| Task                    | Where                     |
-| ----------------------- | ------------------------- |
-| Application development | Local machine             |
-| Source control          | GitHub                    |
-| Application build       | Cloudflare Workers Builds |
-| Application deployment  | Cloudflare Workers        |
-| Database storage        | Cloudflare D1             |
-| Database migrations     | Wrangler CLI              |
-| Secret management       | Cloudflare                |
-| DNS and SSL             | Cloudflare                |
-| Production monitoring   | Cloudflare Dashboard      |
-
----
-
-## 18. Important Operational Rules
-
-1. Never commit production passwords or Secrets to GitHub.
-2. Never replace the production D1 database ID accidentally.
-3. Never recreate the production database just to fix a deployment issue.
-4. Always inspect migrations before applying them to production.
-5. Apply required database migrations before deploying code that depends on them.
-6. Use GitHub as the primary deployment source after integration.
-7. Keep manual Wrangler deployment available for controlled maintenance.
-8. Keep production backups outside the Git repository.
-9. Do not assume that changing the initial admin Secret resets an existing account.
-10. Verify production health after every deployment.
-11. Keep the committed `wrangler.jsonc` configuration compatible with Cloudflare Builds.
-12. Remember that `skip-worktree` only affects the local Git index and does not transfer local configuration changes to GitHub.
-13. Use `npm run deploy:cf` as the Cloudflare Deploy command to avoid running the Build command twice.
-14. Do not use `deploy:cf-only` when the application requires unapplied database migrations.
-15. Prefer backward-compatible database migrations for production releases.
-
----
-
-**Deployment model:**
-
-```text
-GitHub
-   |
-   v
-Cloudflare Workers Builds
-   |
-   v
-npm ci
-   |
-   v
 npm run build
-   |
-   v
-D1 Remote Migrations
-   |
-   v
-wrangler deploy
-   |
-   v
-Cloudflare Worker + Workers Assets
-   |
-   v
-Cloudflare D1
+INITIAL_ADMIN_USERNAME=admin INITIAL_ADMIN_PASSWORD=choose-a-long-password npm start
 ```
 
-This architecture keeps the application, API, and database on Cloudflare while using GitHub as the source of truth for application code.
+Differences between the runtimes are limited to infrastructure adapters
+(`drizzle-orm/d1` vs `drizzle-orm/libsql`); the API, validation and business
+rules are one shared codebase.
 
-Normal deployments require only a Git push to the production branch. Cloudflare handles the build, database migrations, and Worker deployment automatically.
+---
+
+## 20. Operational Rules
+
+1. Never commit production passwords, secrets or the generated
+   `wrangler.jsonc` to Git.
+2. Never replace the production D1 database id accidentally — double-check
+   `D1_DATABASE_ID` whenever the deployment stops building.
+3. Never recreate the production database to fix a deployment issue.
+4. Always inspect migrations before applying them to production.
+5. Prefer the Git-integration path for day-to-day deploys; keep the manual
+   path for controlled maintenance.
+6. Keep backups outside the repository and test restores.
+7. Verify `/api/health` after every deployment.
+8. `D1_DATABASE_ID` belongs in **build variables**; `INITIAL_ADMIN_PASSWORD`
+   belongs in **Worker secrets**; `APP_TIMEZONE`/`DEFAULT_LANGUAGE`/
+   `INITIAL_ADMIN_USERNAME` belong in **Worker vars**.
+
+---
+
+**Summary of the deployment model:**
+
+```text
+GitHub push → Cloudflare Workers Builds
+  → npm ci
+  → npm run config:generate   (D1_DATABASE_ID from build variables)
+  → npm run build
+  → npm run deploy:cf         (remote D1 migrations → wrangler deploy)
+  → Worker + Workers Assets on Cloudflare, data in your D1 database
+```
+
+The repository stays free of environment-specific configuration: every
+deployment generates its own `wrangler.jsonc` from the committed template and
+its own database id.
