@@ -1,0 +1,39 @@
+// Wrangler configuration for the Cloudflare deployment target.
+//
+// Before first deployment:
+//   1. npx wrangler d1 create ryty
+//   2. Replace "database_id" below with the id returned by that command.
+//   3. npx wrangler d1 migrations apply ryty --remote
+//   4. npx wrangler secret put INITIAL_ADMIN_PASSWORD
+//      (optionally: npx wrangler secret put INITIAL_ADMIN_USERNAME, defaults to "admin")
+//   5. npm run deploy
+//
+// When deploying through the Cloudflare Git integration, set the build
+// command to "npm run build" and the deploy command to "npx wrangler deploy".
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ryty",
+  "main": "backend/src/runtime/cloudflare.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ryty",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_TIMEZONE": "UTC",
+    "DEFAULT_LANGUAGE": "en",
+    "INITIAL_ADMIN_USERNAME": "admin",
+  },
+  // INITIAL_ADMIN_PASSWORD must be configured as a Worker secret:
+  //   npx wrangler secret put INITIAL_ADMIN_PASSWORD
+  // Never add it to "vars" and never commit it to Git.
+}
