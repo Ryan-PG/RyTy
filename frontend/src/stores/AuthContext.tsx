@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import type { AuthUser, Language, Theme } from "@ryty/shared";
 import { api, ApiError, type AppInfo } from "../services/api";
-import { applyLanguage, isLanguage } from "../i18n";
+import { applyLanguage } from "../i18n";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -32,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applyTheme = useCallback((next: Theme) => {
     setThemeState(next);
+    localStorage.setItem("ryty.theme", next);
     const resolved =
       next === "system" ? (themeQuery.matches ? "dark" : "light") : next;
     setEffectiveTheme(resolved);
@@ -62,8 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await api.me();
       setUser(me);
       setStatus("authenticated");
-      const stored = localStorage.getItem("ryty.language");
-      applyUserLanguage(isLanguage(stored) ? stored : me.language);
+      // The server-resolved preference is authoritative; localStorage is
+      // only a pre-render hint and gets overwritten here.
+      applyUserLanguage(me.language);
       applyTheme(me.theme as Theme);
     } catch {
       setUser(null);

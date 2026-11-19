@@ -12,6 +12,9 @@ function toUser(row: UserRow): User {
     role: row.role as Role,
     isActive: row.isActive,
     mustChangePassword: row.mustChangePassword,
+    language: (row.language as User["language"]) ?? null,
+    theme: (row.theme as User["theme"]) ?? null,
+    timezone: row.timezone,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

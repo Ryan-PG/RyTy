@@ -7,6 +7,10 @@ export interface User {
   role: Role;
   isActive: boolean;
   mustChangePassword: boolean;
+  /** Personal UI preferences (null/undefined = inherit application defaults). */
+  language?: Language | null;
+  theme?: Theme | null;
+  timezone?: string | null;
   createdAt: string;
   updatedAt: string;
 }
