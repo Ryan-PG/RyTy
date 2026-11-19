@@ -56,6 +56,13 @@ rewrites historical timestamps.
   Unknown tags are created automatically; tag names are case-insensitive and
   normalized (whitespace collapsed). Activities can be filtered by project
   and by tag; CSV export includes the project and tags columns.
+- **Co-doers (co-operators)**: when recording an activity, the creator is
+  the **doer/owner** and may attach other signed-in users as co-doers (max
+  10). Co-doers see the activity in their own list (marked with the owner's
+  username) read-only; editing and deleting stay with the owner, and time
+  is always attributed to the owner in reports. Timer co-doers chosen at
+  start transfer to the resulting activity. CSV export includes a co_doers
+  column.
 
 ### 2.5 Reports
 
@@ -223,6 +230,8 @@ Five tables:
   created_by, created_at, updated_at
 - **tags** — id, name (unique, case-insensitive), created_by, created_at
 - **activity_tags** — activity_id + tag_id (composite PK)
+- **activity_coops** — activity_id + user_id (composite PK): co-doers
+  attached by the owner
 
 Indexes on: `activities(user_id, occurred_on)`, `activities(started_at)`,
 `activities(ended_at)`, `sessions(token_hash)`, `sessions(expires_at)`,

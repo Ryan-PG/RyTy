@@ -61,7 +61,7 @@ export function ReportsPage() {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const appInfoVisibility = user?.role === "admin";
+  const canFilterByUser = user?.role === "admin" || user?.reportsVisibility === "all_users";
 
   useEffect(() => {
     // Load the user filter list when the viewer may see other users.
@@ -155,7 +155,7 @@ export function ReportsPage() {
             <Input type="date" aria-label={t("common.to")} value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-36" />
           </div>
         )}
-        {(appInfoVisibility || users.length > 0) && (
+        {canFilterByUser && (
           <Select
             aria-label={t("reports.userFilter")}
             value={userId ?? ""}

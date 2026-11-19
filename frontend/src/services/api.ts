@@ -149,10 +149,17 @@ export const api = {
     description?: string,
     projectId?: number | null,
     tags?: string[],
+    cooperatorIds?: number[],
   ) =>
     request<ActiveTimer & { elapsedSeconds: number }>(
       "/api/timer/start",
-      jsonBody({ title, description, projectId: projectId ?? null, tags }),
+      jsonBody({
+        title,
+        description,
+        projectId: projectId ?? null,
+        tags,
+        cooperatorIds,
+      }),
     ),
 
   pauseTimer: () =>

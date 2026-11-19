@@ -14,6 +14,7 @@ interface TimerContextValue {
     description?: string,
     projectId?: number | null,
     tags?: string[],
+    cooperatorIds?: number[],
   ) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
@@ -70,8 +71,9 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       description?: string,
       projectId?: number | null,
       tags?: string[],
+      cooperatorIds?: number[],
     ) => {
-      syncAnchor(await api.startTimer(title, description, projectId, tags));
+      syncAnchor(await api.startTimer(title, description, projectId, tags, cooperatorIds));
     },
     [syncAnchor],
   );

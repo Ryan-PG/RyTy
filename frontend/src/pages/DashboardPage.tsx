@@ -13,6 +13,7 @@ import { ActivityFormModal } from "../components/ActivityFormModal";
 import { ActivityRow } from "../components/ActivityRow";
 import { ProjectPicker } from "../components/ProjectPicker";
 import { TagInput } from "../components/TagInput";
+import { CoopPicker } from "../components/CoopPicker";
 import { formatDuration, formatDurationCompact, greetingByHour, localHourIn } from "../utils/format";
 
 /**
@@ -31,6 +32,7 @@ export function DashboardPage() {
   const [showDescription, setShowDescription] = useState(false);
   const [projectId, setProjectId] = useState<number | null | undefined>(undefined);
   const [tags, setTags] = useState<string[]>([]);
+  const [cooperatorIds, setCooperatorIds] = useState<number[]>([]);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
 
@@ -68,10 +70,17 @@ export function DashboardPage() {
     setStarting(true);
     try {
       const effectiveProjectId = projectId === undefined ? (defaultProject?.id ?? null) : projectId;
-      await start(title.trim(), description.trim() || undefined, effectiveProjectId, tags);
+      await start(
+        title.trim(),
+        description.trim() || undefined,
+        effectiveProjectId,
+        tags,
+        cooperatorIds,
+      );
       setTitle("");
       setDescription("");
       setTags([]);
+      setCooperatorIds([]);
       setShowDescription(false);
     } catch {
       toast(t("common.errorGeneric"), "error");
@@ -192,12 +201,21 @@ export function DashboardPage() {
                 onChange={(id) => setProjectId(id)}
                 ariaLabel={t("projects.title")}
               />
-              <div className="min-w-48 flex-1">
+              <div className="min-w-40 flex-1">
                 <TagInput
                   value={tags}
                   onChange={setTags}
                   placeholder={t("tags.placeholderShort")}
                   ariaLabel={t("tags.title")}
+                />
+              </div>
+              <div className="min-w-40 flex-1">
+                <CoopPicker
+                  value={cooperatorIds}
+                  onChange={setCooperatorIds}
+                  ownerId={user?.id}
+                  placeholder={t("coops.placeholderShort")}
+                  ariaLabel={t("coops.title")}
                 />
               </div>
               {!showDescription && (

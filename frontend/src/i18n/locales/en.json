@@ -79,6 +79,13 @@
     "placeholder": "Type a tag, then press , to add",
     "placeholderShort": "Add tags — comma to add"
   },
+  "coops": {
+    "title": "Co-doers",
+    "placeholder": "Add a teammate as co-doer (@username)",
+    "placeholderShort": "Add co-doers",
+    "hint": "Co-doers can see this activity in their own list; only you can edit it. Time stays attributed to you.",
+    "with": "Co-doers: {{names}}"
+  },
   "nav": {
     "dashboard": "Home",
     "activities": "Activities",

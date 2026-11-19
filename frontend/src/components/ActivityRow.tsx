@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FolderKanban } from "lucide-react";
+import { FolderKanban, Users } from "lucide-react";
 import type { Activity } from "@ryty/shared";
 import { Badge } from "./ui";
 import { useAuth } from "../stores/AuthContext";
@@ -15,14 +15,15 @@ export function ActivityRow({
   showUser?: boolean;
 }) {
   const { t } = useTranslation();
-  const { language } = useAuth();
+  const { language, user } = useAuth();
+  const showOwner = showUser || (activity.username !== undefined && activity.userId !== user?.id);
 
   return (
     <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate text-sm font-medium text-text">{activity.title}</p>
-          {showUser && activity.username && (
+          {showOwner && activity.username && (
             <span className="shrink-0 text-xs text-faint" dir="ltr">
               @{activity.username}
             </span>
@@ -41,6 +42,17 @@ export function ActivityRow({
               #{tag}
             </span>
           ))}
+          {activity.cooperators.length > 0 && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted"
+              title={t("coops.with", { names: activity.cooperators.map((c) => "@" + c.username).join(" ") })}
+            >
+              <Users className="size-3" aria-hidden />
+              <span dir="ltr" className="max-w-40 truncate">
+                {activity.cooperators.map((c) => c.username).join(", ")}
+              </span>
+            </span>
+          )}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
           {activity.startedAt && activity.endedAt ? (

@@ -8,6 +8,7 @@ import { useToast } from "../stores/ToastContext";
 import { Button, Field, Input, Modal, Segmented, Textarea } from "./ui";
 import { ProjectPicker } from "./ProjectPicker";
 import { TagInput } from "./TagInput";
+import { CoopPicker } from "./CoopPicker";
 import { todayIn, utcToZonedLocalInput, zonedTimeToUtcIso } from "../utils/format";
 
 type Mode = "range" | "duration";
@@ -63,6 +64,7 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
   const [occurredOn, setOccurredOn] = useState(todayIn(user?.timezone ?? "UTC"));
   const [projectId, setProjectId] = useState<number | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [cooperatorIds, setCooperatorIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [overlapCount, setOverlapCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
       setDescription(activity.description ?? "");
       setProjectId(activity.project?.id ?? null);
       setTags(activity.tags);
+      setCooperatorIds(activity.cooperators.map((c) => c.id));
       const timezone = user?.timezone ?? "UTC";
       if (activity.entryType === "duration") {
         setMode("duration");
@@ -99,6 +102,7 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
       // Default to the user's default project for frictionless entry.
       setProjectId(defaultProject?.id ?? null);
       setTags([]);
+      setCooperatorIds([]);
     }
   }, [open, activity, initialMode, user?.timezone, defaultProject?.id]);
 
@@ -137,6 +141,7 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
         description: description.trim() || null,
         projectId,
         tags,
+        cooperatorIds,
       };
       if (isEdit && activity) {
         await api.updateActivity(
@@ -246,6 +251,16 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
               />
             </Field>
           </div>
+
+          <Field label={t("coops.title")} hint={t("coops.hint")}>
+            <CoopPicker
+              value={cooperatorIds}
+              onChange={setCooperatorIds}
+              ownerId={user?.id}
+              placeholder={t("coops.placeholder")}
+              ariaLabel={t("coops.title")}
+            />
+          </Field>
 
           {mode === "range" ? (
             <div className="grid grid-cols-2 gap-3">

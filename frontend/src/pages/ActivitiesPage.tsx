@@ -174,29 +174,34 @@ export function ActivitiesPage() {
                   </span>
                 </div>
                 <Card className="divide-y divide-border overflow-hidden">
-                  {items.map((activity) => (
-                    <div key={activity.id} className="group relative">
-                      <ActivityRow activity={activity} timezone={timezone} />
-                      <div className="absolute inset-y-0 end-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
-                        <button
-                          type="button"
-                          aria-label={t("common.edit")}
-                          className="rounded-[var(--radius-sm)] bg-surface p-1.5 text-muted shadow-sm hover:text-text"
-                          onClick={() => setEditing(activity)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={t("common.delete")}
-                          className="rounded-[var(--radius-sm)] bg-surface p-1.5 text-muted shadow-sm hover:text-danger"
-                          onClick={() => setDeleting(activity)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
+                  {items.map((activity) => {
+                    const isOwner = activity.userId === user?.id;
+                    return (
+                      <div key={activity.id} className="group relative">
+                        <ActivityRow activity={activity} timezone={timezone} />
+                        {isOwner && (
+                          <div className="absolute inset-y-0 end-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
+                            <button
+                              type="button"
+                              aria-label={t("common.edit")}
+                              className="rounded-[var(--radius-sm)] bg-surface p-1.5 text-muted shadow-sm hover:text-text"
+                              onClick={() => setEditing(activity)}
+                            >
+                              <Pencil className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={t("common.delete")}
+                              className="rounded-[var(--radius-sm)] bg-surface p-1.5 text-muted shadow-sm hover:text-danger"
+                              onClick={() => setDeleting(activity)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </Card>
               </section>
             );
