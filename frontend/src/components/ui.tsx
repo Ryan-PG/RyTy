@@ -9,6 +9,9 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   loading?: boolean;
+  /** When set, the button renders as an anchor (e.g. file downloads). */
+  href?: string;
+  download?: boolean;
 }
 
 const buttonVariants: Record<ButtonVariant, string> = {
@@ -19,10 +22,27 @@ const buttonVariants: Record<ButtonVariant, string> = {
   danger: "bg-danger text-white hover:opacity-90 disabled:opacity-60",
 };
 
-export function Button({ variant = "primary", loading, className = "", children, disabled, ...rest }: ButtonProps) {
+const buttonBase =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius)] px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed";
+
+export function Button({ variant = "primary", loading, className = "", children, disabled, href, download, ...rest }: ButtonProps) {
+  const classes = `${buttonBase} ${buttonVariants[variant]} ${className}`;
+  if (href !== undefined) {
+    // Render as a link styled like a button. A nested <button> inside an
+    // <a> would swallow the click and never trigger the navigation.
+    return (
+      <a
+        className={classes}
+        href={href}
+        {...(download !== undefined ? { download } : {})}
+      >
+        {children}
+      </a>
+    );
+  }
   return (
     <button
-      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius)] px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed ${buttonVariants[variant]} ${className}`}
+      className={classes}
       disabled={disabled || loading}
       {...rest}
     >

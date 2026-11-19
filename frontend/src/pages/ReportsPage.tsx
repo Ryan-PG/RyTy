@@ -5,7 +5,7 @@ import type { ReportSummary } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { Button, Card, EmptyState, Input, Segmented, Select, Spinner } from "../components/ui";
-import { formatDurationCompact, formatLocalDate } from "../utils/format";
+import { formatDurationCompact, formatLocalDate, todayIn } from "../utils/format";
 
 type Mode = "daily" | "weekly" | "monthly" | "custom";
 
@@ -47,18 +47,21 @@ function rangeFor(mode: Mode, date: string, customFrom: string, customTo: string
   }
 }
 
-/** Reports: period summaries, per-user/per-title breakdowns, CSV export. */
+/** Reports: period summaries, per-user/per-project breakdowns, CSV export. */
 export function ReportsPage() {
   const { t } = useTranslation();
   const { user, language } = useAuth();
 
+  const timezone = user?.timezone ?? "UTC";
   const [mode, setMode] = useState<Mode>("weekly");
-  const [date, setDate] = useState(isoToday());
-  const [customFrom, setCustomFrom] = useState(isoToday());
-  const [customTo, setCustomTo] = useState(isoToday());
+  const [date, setDate] = useState(() => todayIn(user?.timezone ?? "UTC"));
+  const [customFrom, setCustomFrom] = useState(() => todayIn(user?.timezone ?? "UTC"));
+  const [customTo, setCustomTo] = useState(() => todayIn(user?.timezone ?? "UTC"));
   const [userId, setUserId] = useState<number | undefined>(undefined);
   const [users, setUsers] = useState<{ id: number; username: string }[]>([]);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
+  /** Rolling window: the past 7 days, independent of the selected period. */
+  const [last7, setLast7] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const canFilterByUser = user?.role === "admin" || user?.reportsVisibility === "all_users";
@@ -91,6 +94,31 @@ export function ReportsPage() {
     void load();
   }, [load]);
 
+  // The past-7-days window is fixed: [today - 6, today] in the user timezone.
+  useEffect(() => {
+    void (async () => {
+      const today = todayIn(timezone);
+      const from = shiftDate(today, -6);
+      try {
+        setLast7(await api.reportSummary({ from, to: today }));
+      } catch {
+        setLast7(null);
+      }
+    })();
+  }, [timezone]);
+
+  const last7Days = useMemo(() => {
+    // Exactly seven rows (ascending), zero-filled for quiet empty days.
+    if (!last7) return [];
+    const today = todayIn(timezone);
+    const totals = new Map(last7.byDay.map((d) => [d.date, d.totalSeconds]));
+    const counts = new Map(last7.byDay.map((d) => [d.date, d.count]));
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = shiftDate(today, i - 6);
+      return { date: day, totalSeconds: totals.get(day) ?? 0, count: counts.get(day) ?? 0 };
+    });
+  }, [last7, timezone]);
+
   const shift = (direction: 1 | -1) => {
     const step = mode === "daily" ? 1 : mode === "weekly" ? 7 : mode === "monthly" ? 0 : 0;
     if (mode === "monthly") {
@@ -108,9 +136,7 @@ export function ReportsPage() {
     return `${formatLocalDate(range.from, language, opts)} — ${formatLocalDate(range.to, language, opts)}`;
   };
 
-  const maxDaySeconds = summary
-    ? Math.max(1, ...summary.byDay.map((d) => d.totalSeconds))
-    : 1;
+  const maxDaySeconds = Math.max(1, ...last7Days.map((d) => d.totalSeconds));
 
   const exportHref = api.exportCsvUrl({ ...range, userId });
 
@@ -118,12 +144,10 @@ export function ReportsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold">{t("reports.title")}</h1>
-        <a href={exportHref} download>
-          <Button variant="secondary">
-            <Download className="size-4" aria-hidden />
-            {t("reports.exportCsv")}
-          </Button>
-        </a>
+        <Button variant="secondary" href={exportHref} download>
+          <Download className="size-4" aria-hidden />
+          {t("reports.exportCsv")}
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -196,27 +220,6 @@ export function ReportsPage() {
             </Card>
           </div>
 
-          {/* Per day — quiet horizontal bars, no chart library */}
-          <Card className="p-3.5">
-            <h2 className="mb-2.5 text-sm font-semibold text-muted">{t("reports.perDay")}</h2>
-            <div className="flex flex-col gap-1.5">
-              {summary.byDay.map((d) => (
-                <div key={d.date} className="flex items-center gap-2.5">
-                  <span className="w-24 shrink-0 text-xs text-muted">{formatLocalDate(d.date, language, { month: "short", day: "numeric", weekday: undefined })}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
-                    <div
-                      className="h-full rounded-full bg-accent"
-                      style={{ width: `${Math.round((d.totalSeconds / maxDaySeconds) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="w-16 shrink-0 text-end text-xs font-medium tabular" dir="ltr">
-                    {formatDurationCompact(d.totalSeconds, language)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
           {/* Per user (when visible) */}
           {summary.byUser.length > 0 && (summary.byUser.length > 1 || userId === undefined) && (
             <Card className="overflow-hidden">
@@ -273,22 +276,34 @@ export function ReportsPage() {
             </Card>
           )}
 
-          {/* Per title */}
-          <Card className="overflow-hidden">
-            <h2 className="border-b border-border px-3.5 py-2.5 text-sm font-semibold text-muted">{t("reports.perTitle")}</h2>
-            <ul className="divide-y divide-border">
-              {summary.byTitle.map((entry) => (
-                <li key={entry.title} className="flex items-center justify-between gap-3 px-3.5 py-2">
-                  <span className="min-w-0 truncate text-sm">{entry.title}</span>
-                  <span className="shrink-0 text-xs text-faint tabular">×{entry.count}</span>
-                  <span className="shrink-0 text-sm font-medium tabular" dir="ltr">
-                    {formatDurationCompact(entry.totalSeconds, language)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
         </>
+      )}
+
+      {/* Per day — always exactly the past 7 days, independent of the
+          selected period. Quiet horizontal bars, no chart library. */}
+      {last7Days.length > 0 && (
+        <Card className="p-3.5">
+          <div className="mb-2.5 flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-muted">{t("reports.perDay")}</h2>
+            <span className="text-xs text-faint">{t("reports.last7Days")}</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {last7Days.map((d) => (
+              <div key={d.date} className="flex items-center gap-2.5">
+                <span className="w-28 shrink-0 text-xs text-muted">{formatLocalDate(d.date, language, { weekday: "short", month: "short", day: "numeric" })}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${Math.round((d.totalSeconds / maxDaySeconds) * 100)}%` }}
+                  />
+                </div>
+                <span className="w-16 shrink-0 text-end text-xs font-medium tabular" dir="ltr">
+                  {formatDurationCompact(d.totalSeconds, language)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );

@@ -204,15 +204,14 @@
     "perUser": "Per user",
     "perProject": "Per project",
     "noProject": "No project",
-    "perTitle": "By activity",
     "byDay": "Day",
     "byUser": "User",
-    "byTitle": "Activity",
     "count": "Count",
     "exportCsv": "Export CSV",
     "empty": "No activities in this period.",
     "userFilter": "User",
-    "privateNotice": "Report visibility is private — you only see your own data."
+    "privateNotice": "Report visibility is private — you only see your own data.",
+    "last7Days": "Last 7 days"
   },
   "admin": {
     "title": "Administration",
