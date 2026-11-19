@@ -169,4 +169,12 @@ Business rules (auth, authorization, timer lifecycle, report visibility) are enf
 
 ## 📜 License
 
-MIT
+[MIT](./LICENSE)
+
+---
+
+<div align="center">
+
+Made with care · ساخته‌شده با دقت
+
+</div>
