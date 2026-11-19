@@ -20,15 +20,15 @@ RyTy uses a single-origin deployment architecture on Cloudflare.
                                v
                     Cloudflare Worker (ryty)
                                |
-                 +-------------+-------------+
-                 |                           |
-                 v                           v
-          Static Assets                 Hono API
-          React + Vite                     |
-                                           |
-                                           v
-                                    Cloudflare D1
-                                    SQLite Database
+                  +------------+------------+
+                  |                         |
+                  v                         v
+            Static Assets               Hono API
+            React + Vite                    |
+                                            |
+                                            v
+                                       Cloudflare D1
+                                       SQLite Database
 ```
 
 ### Infrastructure Components
@@ -49,7 +49,8 @@ RyTy uses a single-origin deployment architecture on Cloudflare.
 - No Docker installation is required for Cloudflare deployment.
 - Frontend and backend share the same origin.
 - D1 provides persistent database storage.
-- GitHub pushes can trigger automatic deployments.
+- GitHub pushes trigger automatic deployments.
+- Database migrations are automatically applied during deployment.
 - Sensitive configuration stays outside the repository.
 
 ---
@@ -358,7 +359,7 @@ For password recovery, use the application's administrator password reset functi
 
 Before configuring automatic GitHub deployments, you can deploy the application manually.
 
-The project already provides a deployment script.
+The project provides deployment scripts.
 
 ### 8.1. Build and Deploy
 
@@ -368,12 +369,27 @@ Run:
 npm run deploy
 ```
 
-This executes:
+The deployment script executes the following steps:
 
 ```text
-npm run build:client
-wrangler deploy
+1. Build the complete application
+          |
+          v
+2. Apply pending remote D1 migrations
+          |
+          v
+3. Deploy the Worker
 ```
+
+The corresponding commands are:
+
+```powershell
+npm run build
+npm run db:migrate:d1:remote
+npx wrangler deploy
+```
+
+If a migration fails, the deployment stops and the new Worker is not deployed.
 
 Wrangler uploads the Worker and its configured assets to Cloudflare.
 
@@ -445,19 +461,71 @@ main
 
 ### 9.3. Configure Build Settings
 
-Use the following configuration:
+The deployment scripts in `package.json` should include:
 
-| Setting           | Value                 |
-| ----------------- | --------------------- |
-| Worker name       | `ryty`                |
-| Production branch | `main`                |
-| Root directory    | `/`                   |
-| Install command   | `npm ci`              |
-| Build command     | `npm run build`       |
-| Deploy command    | `npx wrangler deploy` |
-| Node.js version   | `22`                  |
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "dev:node": "tsx --env-file-if-exists=.env backend/src/runtime/node.ts",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "node scripts/build-server.mjs",
+    "start": "node --env-file-if-exists=.env dist/server/server.mjs",
+    "preview": "npm run build && npm run start",
+    "typecheck": "tsc -p frontend/tsconfig.json --noEmit && tsc -p backend/tsconfig.json --noEmit && tsc -p backend/tsconfig.node.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate:d1:local": "wrangler d1 migrations apply ryty --local",
+    "db:migrate:d1:remote": "wrangler d1 migrations apply ryty --remote",
+    "deploy": "npm run build && npm run db:migrate:d1:remote && wrangler deploy",
+    "deploy:cf": "npm run db:migrate:d1:remote && wrangler deploy",
+    "deploy:cf-only": "wrangler deploy"
+  }
+}
+```
 
-These settings follow the project's existing build configuration and deployment structure.
+The Cloudflare Workers Builds settings must be configured as follows:
+
+| Setting           | Value               |
+| ----------------- | ------------------- |
+| Worker name       | `ryty`              |
+| Production branch | `main`              |
+| Root directory    | `/`                 |
+| Install command   | `npm ci`            |
+| Build command     | `npm run build`     |
+| Deploy command    | `npm run deploy:cf` |
+| Node.js version   | `22`                |
+
+**Important:**
+
+The Build command and Deploy command have separate responsibilities.
+
+The Build command:
+
+```powershell
+npm run build
+```
+
+Builds both the client and server.
+
+The Deploy command:
+
+```powershell
+npm run deploy:cf
+```
+
+Executes:
+
+```powershell
+npm run db:migrate:d1:remote
+npx wrangler deploy
+```
+
+Do not use `npm run deploy` as the Cloudflare Deploy command because it runs the build again.
+
+This configuration avoids duplicate builds.
 
 ### 9.4. Important: Existing Worker and Database
 
@@ -471,7 +539,31 @@ Make sure:
 - The D1 binding remains `DB`.
 - The existing Secrets are configured for the production Worker.
 
-Do not create an unrelated production database or change the database ID during GitHub integration.
+**Important note about `wrangler.jsonc` and Git:**
+
+If `wrangler.jsonc` is marked with:
+
+```powershell
+git update-index --skip-worktree wrangler.jsonc
+```
+
+GitHub and Cloudflare Workers Builds cannot see your local-only changes.
+
+Cloudflare checks out the version committed to GitHub, not the modified version on your computer.
+
+Therefore:
+
+- The committed version of `wrangler.jsonc` must already contain the correct production Worker configuration.
+- The production D1 `database_id` must be correct in the committed configuration.
+- The `DB` binding must be correct.
+- The migrations directory must be configured correctly.
+- The required assets and entry-point settings must be present.
+
+If your local configuration contains changes that are missing from the committed version, Cloudflare will not receive them.
+
+Do not assume that `skip-worktree` synchronizes local configuration with Cloudflare.
+
+**Never put production passwords or other sensitive Secrets in `wrangler.jsonc`.**
 
 If the dashboard workflow creates a new Worker instead of connecting the existing deployment, stop and verify the resource configuration before proceeding.
 
@@ -518,13 +610,17 @@ Cloudflare Workers Builds
     v
 npm ci
     |
-    | Build
+    | Build command
     v
 npm run build
     |
-    | Deploy
+    | Deploy command
     v
-npx wrangler deploy
+npm run db:migrate:d1:remote
+    |
+    | If migrations succeed
+    v
+wrangler deploy
     |
     v
 Production Worker
@@ -558,9 +654,30 @@ Check:
 - Build status.
 - Deployment status.
 - Build logs.
+- Migration output.
 - Deployment errors.
 
-### 10.3. Manual Deployment Is No Longer Required
+### 10.3. Automatic Database Migrations
+
+Database migrations are now part of the automated deployment process.
+
+Whenever you push changes to the production branch:
+
+1. Cloudflare installs dependencies.
+2. Cloudflare builds the application.
+3. The Deploy command applies pending remote D1 migrations.
+4. If migrations succeed, Wrangler deploys the Worker.
+5. The updated application becomes available.
+
+Wrangler tracks applied migrations and does not reapply successfully recorded migrations.
+
+If no new migrations exist, no new schema changes are applied.
+
+If a migration fails, the Deploy command stops and the new Worker is not deployed.
+
+**Important:** A successful deployment does not mean that every application-level issue has been ruled out. Always verify production health after deployment.
+
+### 10.4. Manual Deployment Is No Longer Required
 
 After GitHub integration is working, normal application updates should be deployed through GitHub.
 
@@ -647,6 +764,9 @@ After deployment, verify the following functionality.
 - [ ] Production Secrets are configured.
 - [ ] Custom domain works.
 - [ ] HTTPS works correctly.
+- [ ] GitHub automatic deployment works.
+- [ ] Cloudflare Build command is `npm run build`.
+- [ ] Cloudflare Deploy command is `npm run deploy:cf`.
 
 ### Authentication
 
@@ -729,9 +849,25 @@ Remember: updating this Secret does not reset an existing administrator's passwo
 
 ### Deploy Manually
 
+Complete local build, migration, and deployment:
+
 ```powershell
 npm run deploy
 ```
+
+Deploy without rebuilding:
+
+```powershell
+npm run deploy:cf
+```
+
+Deploy without applying migrations:
+
+```powershell
+npm run deploy:cf-only
+```
+
+**Warning:** `deploy:cf-only` intentionally skips database migrations. Use it only when you have verified that the production database schema is already compatible with the application being deployed.
 
 ### Inspect Wrangler Version
 
@@ -772,37 +908,90 @@ For a production system, establish a regular backup strategy instead of relying 
 
 ## 15. Database Migrations During Future Updates
 
-Database migrations are separate from application deployment.
+Database migrations are automatically executed during Cloudflare deployment.
 
-A GitHub push does not automatically apply D1 migrations unless an explicit migration step has been configured.
-
-For a release that changes the database schema, use this sequence:
+For a release that changes the database schema, use this recommended workflow:
 
 ```text
-1. Review migration files
+1. Create migration files locally
           |
           v
-2. Back up production database
+2. Review migration SQL
           |
           v
-3. Apply D1 migrations
+3. Test migrations against local D1
           |
           v
-4. Deploy application through GitHub
+4. Commit migration files to Git
           |
           v
-5. Verify production application
+5. Push changes to GitHub
+          |
+          v
+6. Cloudflare builds the application
+          |
+          v
+7. Cloudflare applies pending remote migrations
+          |
+          v
+8. Cloudflare deploys the Worker
+          |
+          v
+9. Verify production application
 ```
 
-Apply migrations using:
+### 15.1. Generate Migrations
+
+Use:
 
 ```powershell
-npx wrangler d1 migrations apply ryty --remote
+npm run db:generate
 ```
 
-Do not assume that a successful Worker deployment means the database schema is up to date.
+This generates migration files based on the Drizzle configuration.
 
-For production schema changes, prefer backward-compatible migrations so that the currently deployed application can continue working during the deployment process.
+Review the generated SQL before deploying.
+
+### 15.2. Test Migrations Locally
+
+```powershell
+npm run db:migrate:d1:local
+```
+
+Make sure the local database schema is correct.
+
+### 15.3. Deploy Through GitHub
+
+Commit the application changes and migration files:
+
+```powershell
+git add .
+git commit -m "Update database schema"
+git push origin main
+```
+
+Cloudflare automatically applies the pending remote migrations before deploying the new Worker.
+
+### 15.4. Production Migration Safety
+
+For production schema changes:
+
+- Prefer backward-compatible migrations.
+- Avoid removing columns while the currently deployed application still depends on them.
+- Avoid renaming columns without a compatibility strategy.
+- Review generated SQL before deployment.
+- Back up production data before high-risk schema changes.
+- Verify application health after deployment.
+
+For breaking schema changes, use the Expand/Contract migration pattern:
+
+1. Add new columns or tables without removing old ones.
+2. Deploy application code compatible with both old and new structures.
+3. Migrate existing data.
+4. Update application code to use the new structure.
+5. Remove obsolete structures only after confirming that no deployed code depends on them.
+
+This reduces deployment risks when the application and database schema are updated separately.
 
 ---
 
@@ -853,12 +1042,44 @@ Check:
 - Node.js version is 22.
 - Install command is `npm ci`.
 - Build command is `npm run build`.
-- Deploy command is `npx wrangler deploy`.
+- Deploy command is `npm run deploy:cf`.
 - The repository root directory is correct.
-- `wrangler.jsonc` is present.
+- `wrangler.jsonc` exists in the GitHub repository.
+- The committed `wrangler.jsonc` contains the correct production configuration.
 - The D1 database ID is valid.
+- The `DB` binding is correct.
+- The migration directory exists.
+- The Cloudflare Worker has access to the required production resources.
 
 Inspect the Cloudflare build logs for the exact error.
+
+### Problem: Migration Fails
+
+Check:
+
+- Migration SQL syntax.
+- Migration file naming and ordering.
+- D1 database availability.
+- Whether the migration has already been applied.
+- Whether the migration depends on an existing table or column.
+- Whether the migration is compatible with the current production schema.
+
+Do not manually edit migration history to bypass an error without understanding the consequences.
+
+If migration fails, the deployment command should stop before deploying the new Worker.
+
+### Problem: Worker Deploys but UI Does Not Load
+
+Check:
+
+- Vite build output.
+- Workers Assets configuration.
+- Asset directory configuration in `wrangler.jsonc`.
+- Worker entry point.
+- Cloudflare deployment logs.
+- Browser console and network errors.
+
+Make sure the `npm run build` command generates all assets expected by the Worker configuration.
 
 ### Problem: Custom Domain Does Not Work
 
@@ -886,6 +1107,8 @@ The intended production configuration is:
 | Database Binding       | `DB`                      |
 | Database Name          | `ryty`                    |
 | Build System           | Cloudflare Workers Builds |
+| Build Command          | `npm run build`           |
+| Deploy Command         | `npm run deploy:cf`       |
 | Deployment Trigger     | Push to `main`            |
 | Runtime                | Cloudflare Workers        |
 | Custom Domain          | `ryty.ryanheida.com`      |
@@ -920,9 +1143,41 @@ The intended production configuration is:
 8. Keep production backups outside the Git repository.
 9. Do not assume that changing the initial admin Secret resets an existing account.
 10. Verify production health after every deployment.
+11. Keep the committed `wrangler.jsonc` configuration compatible with Cloudflare Builds.
+12. Remember that `skip-worktree` only affects the local Git index and does not transfer local configuration changes to GitHub.
+13. Use `npm run deploy:cf` as the Cloudflare Deploy command to avoid running the Build command twice.
+14. Do not use `deploy:cf-only` when the application requires unapplied database migrations.
+15. Prefer backward-compatible database migrations for production releases.
 
 ---
 
-**Deployment model:** GitHub → Cloudflare Workers Builds → Cloudflare Worker + Workers Assets → Cloudflare D1.
+**Deployment model:**
+
+```text
+GitHub
+   |
+   v
+Cloudflare Workers Builds
+   |
+   v
+npm ci
+   |
+   v
+npm run build
+   |
+   v
+D1 Remote Migrations
+   |
+   v
+wrangler deploy
+   |
+   v
+Cloudflare Worker + Workers Assets
+   |
+   v
+Cloudflare D1
+```
 
 This architecture keeps the application, API, and database on Cloudflare while using GitHub as the source of truth for application code.
+
+Normal deployments require only a Git push to the production branch. Cloudflare handles the build, database migrations, and Worker deployment automatically.

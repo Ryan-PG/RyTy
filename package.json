@@ -26,7 +26,7 @@
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:migrate:d1:local": "wrangler d1 migrations apply ryty --local",
     "db:migrate:d1:remote": "wrangler d1 migrations apply ryty --remote",
-    "deploy": "npm run build:client && wrangler deploy",
+    "deploy": "npm run db:migrate:d1:remote && npm run build:client && wrangler deploy",
     "deploy:cf-only": "wrangler deploy"
   },
   "devDependencies": {
