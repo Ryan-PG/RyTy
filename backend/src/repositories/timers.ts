@@ -1,11 +1,20 @@
 import { eq } from "drizzle-orm";
-import { timers } from "../database/schema";
+import { projects, timers } from "../database/schema";
 import type { AppDatabase } from "../database/adapter";
 import type { ActiveTimer, TimerState } from "@ryty/shared";
 
 type TimerRow = typeof timers.$inferSelect;
 
-function toTimer(row: TimerRow): ActiveTimer {
+function toTimer(row: TimerRow, projectName: string | null): ActiveTimer {
+  let tagNames: string[] = [];
+  if (row.tags) {
+    try {
+      const parsed: unknown = JSON.parse(row.tags);
+      if (Array.isArray(parsed)) tagNames = parsed.filter((t): t is string => typeof t === "string");
+    } catch {
+      tagNames = [];
+    }
+  }
   return {
     userId: row.userId,
     title: row.title,
@@ -14,6 +23,8 @@ function toTimer(row: TimerRow): ActiveTimer {
     segmentStartedAt: row.segmentStartedAt,
     accumulatedSeconds: row.accumulatedSeconds,
     startedAt: row.startedAt,
+    project: row.projectId ? { id: row.projectId, name: projectName ?? "" } : null,
+    tags: tagNames,
   };
 }
 
@@ -22,13 +33,20 @@ export interface CreateTimerInput {
   title: string;
   description: string | null;
   startedAt: string;
+  projectId: number | null;
+  tagNames: string[];
 }
 
 export function createTimerRepository(db: AppDatabase) {
   return {
     async findByUserId(userId: number): Promise<ActiveTimer | null> {
-      const [row] = await db.select().from(timers).where(eq(timers.userId, userId)).limit(1);
-      return row ? toTimer(row) : null;
+      const [row] = await db
+        .select({ timer: timers, projectName: projects.name })
+        .from(timers)
+        .leftJoin(projects, eq(projects.id, timers.projectId))
+        .where(eq(timers.userId, userId))
+        .limit(1);
+      return row ? toTimer(row.timer, row.projectName) : null;
     },
 
     async create(input: CreateTimerInput): Promise<ActiveTimer> {
@@ -42,10 +60,12 @@ export function createTimerRepository(db: AppDatabase) {
           segmentStartedAt: input.startedAt,
           accumulatedSeconds: 0,
           startedAt: input.startedAt,
+          projectId: input.projectId,
+          tags: input.tagNames.length > 0 ? JSON.stringify(input.tagNames) : null,
           updatedAt: input.startedAt,
         })
         .returning();
-      return toTimer(row);
+      return toTimer(row, null);
     },
 
     /** Accumulate the running segment and switch to paused. */
@@ -63,16 +83,18 @@ export function createTimerRepository(db: AppDatabase) {
         })
         .where(eq(timers.userId, userId))
         .returning();
-      return toTimer(row);
+      return toTimer(row, timer.project?.name ?? null);
     },
 
     async resume(userId: number, now: string): Promise<ActiveTimer | null> {
+      const timer = await this.findByUserId(userId);
+      if (!timer) return null;
       const [row] = await db
         .update(timers)
         .set({ state: "running", segmentStartedAt: now, updatedAt: now })
         .where(eq(timers.userId, userId))
         .returning();
-      return row ? toTimer(row) : null;
+      return row ? toTimer(row, timer.project?.name ?? null) : null;
     },
 
     async delete(userId: number): Promise<void> {

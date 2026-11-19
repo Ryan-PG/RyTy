@@ -4,6 +4,7 @@ import { ENTRY_TYPES } from "@ryty/shared";
 import type { Services } from "./services";
 import { badRequest, forbidden, notFound, HttpError } from "../utils/http";
 import { occurredOn, zonedTimeToUtc } from "../utils/time";
+import { attachTags, canUseProject } from "./project";
 
 export interface OverlapCheck {
   overlapping: Activity[];
@@ -12,6 +13,19 @@ export interface OverlapCheck {
 /** Seconds between two ISO instants. */
 function diffSeconds(startIso: string, endIso: string): number {
   return Math.floor((Date.parse(endIso) - Date.parse(startIso)) / 1000);
+}
+
+/**
+ * Attach tag names to a set of activities (single batched query, no N+1).
+ * Mutates and returns the same array for convenience.
+ */
+export async function withTagNames(services: Services, activities: Activity[]): Promise<Activity[]> {
+  if (activities.length === 0) return activities;
+  const tagMap = await services.tags.namesForActivities(activities.map((a) => a.id));
+  for (const activity of activities) {
+    activity.tags = tagMap.get(activity.id) ?? [];
+  }
+  return activities;
 }
 
 /**
@@ -71,6 +85,12 @@ export async function createActivity(
     throw badRequest("timer_use_endpoints", "Timer activities are created via the timer endpoints");
   }
 
+  // Project (optional): must be one the user can access.
+  let projectId: number | null = null;
+  if (input.projectId != null) {
+    projectId = (await canUseProject(services, user, input.projectId)).id;
+  }
+
   if (input.entryType === ENTRY_TYPES.RANGE) {
     const startUtc = zonedTimeToUtc(input.start, appTimezone);
     const endUtc = zonedTimeToUtc(input.end, appTimezone);
@@ -86,7 +106,7 @@ export async function createActivity(
       endUtc.toISOString(),
     );
     assertNoOverlapUnlessAllowed(overlap, input.allowOverlap ?? false);
-    return services.activities.create({
+    const activity = await services.activities.create({
       userId: user.id,
       title: input.title,
       description: input.description ?? null,
@@ -95,12 +115,15 @@ export async function createActivity(
       endedAt: endUtc.toISOString(),
       durationSeconds,
       occurredOn: occurredOn(startUtc, appTimezone),
+      projectId,
     });
+    await attachTags(services, user.id, activity.id, input.tags);
+    return (await services.activities.findById(activity.id)) ?? activity;
   }
 
   // Duration-only entry: no timestamps, local grouping date required.
   const date = input.occurredOn ?? occurredOn(new Date(), appTimezone);
-  return services.activities.create({
+  const activity = await services.activities.create({
     userId: user.id,
     title: input.title,
     description: input.description ?? null,
@@ -109,7 +132,10 @@ export async function createActivity(
     endedAt: null,
     durationSeconds: input.durationSeconds,
     occurredOn: date,
+    projectId,
   });
+  await attachTags(services, user.id, activity.id, input.tags);
+  return (await services.activities.findById(activity.id)) ?? activity;
 }
 
 /** Update an owned activity with validated client input. */
@@ -125,6 +151,10 @@ export async function updateActivity(
 
   if (input.title !== undefined) patch.title = input.title;
   if (input.description !== undefined) patch.description = input.description ?? null;
+  if (input.projectId !== undefined) {
+    patch.projectId =
+      input.projectId === null ? null : (await canUseProject(services, user, input.projectId)).id;
+  }
 
   if (input.durationSeconds !== undefined) {
     if (existing.entryType === ENTRY_TYPES.DURATION) {
@@ -171,6 +201,9 @@ export async function updateActivity(
 
   const updated = await services.activities.update(id, patch);
   if (!updated) throw notFound("activity_not_found", "Activity not found");
+  if (input.tags !== undefined) {
+    await attachTags(services, user.id, id, input.tags);
+  }
   void existing;
-  return updated;
+  return (await services.activities.findById(id)) ?? updated;
 }

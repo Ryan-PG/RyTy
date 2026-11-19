@@ -3,6 +3,7 @@ import type { Services } from "./services";
 import type { AuthenticatedUser } from "../auth/session";
 import { badRequest, conflict, notFound } from "../utils/http";
 import { occurredOn } from "../utils/time";
+import { attachTags, canUseProject } from "./project";
 
 /**
  * Timer business logic. The database is the single source of truth:
@@ -25,17 +26,24 @@ export async function startTimer(
   user: AuthenticatedUser,
   title: string,
   description: string | null,
+  projectId: number | null,
+  tagNames: string[] | undefined,
 ): Promise<ActiveTimer> {
   const existing = await services.timers.findByUserId(user.id);
   if (existing) {
     throw conflict("timer_already_active", "Stop the active timer before starting a new one");
   }
   const now = new Date().toISOString();
+  const resolvedProjectId =
+    projectId != null ? (await canUseProject(services, user, projectId)).id : null;
+  const tags = tagNames ? (await services.tags.ensureMany(tagNames, user.id)).map((t) => t.name) : [];
   return services.timers.create({
     userId: user.id,
     title,
     description,
     startedAt: now,
+    projectId: resolvedProjectId,
+    tagNames: tags,
   });
 }
 
@@ -80,7 +88,9 @@ export async function stopTimer(
     endedAt: now,
     durationSeconds,
     occurredOn: occurredOn(timer.startedAt, appTimezone),
+    projectId: timer.project?.id ?? null,
   });
+  await attachTags(services, user.id, activity.id, timer.tags);
   await services.timers.delete(user.id);
-  return activity;
+  return (await services.activities.findById(activity.id)) ?? activity;
 }

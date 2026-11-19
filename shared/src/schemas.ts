@@ -5,9 +5,14 @@ import {
   ENTRY_TYPES,
   LANGUAGES,
   MAX_PAGE_SIZE,
+  MAX_TAGS_PER_ACTIVITY,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_NAME_MAX_LENGTH,
+  PROJECT_VISIBILITY,
   REPORT_VISIBILITY,
+  TAG_NAME_MAX_LENGTH,
   THEMES,
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
@@ -69,17 +74,56 @@ export const preferencesSchema = z.object({
   language: z.enum(LANGUAGES).optional(),
   theme: z.enum(THEMES).optional(),
   timezone: timezoneSchema.optional(),
+  /** Set the user's default project (null clears it). */
+  defaultProjectId: z.number().int().positive().nullable().optional(),
 });
 
 export type PreferencesInput = z.infer<typeof preferencesSchema>;
 
 /* ------------------------------------------------------------------ */
-/* Timer                                                               */
+/* Projects & tags                                                     */
 /* ------------------------------------------------------------------ */
 
+export const createProjectSchema = z.object({
+  name: z.string().trim().min(1).max(PROJECT_NAME_MAX_LENGTH),
+  description: z
+    .string()
+    .trim()
+    .max(PROJECT_DESCRIPTION_MAX_LENGTH)
+    .nullish(),
+  /** Admins may create public projects directly. */
+  visibility: z.enum([PROJECT_VISIBILITY.PUBLIC, PROJECT_VISIBILITY.PRIVATE]).optional(),
+  /**
+   * Non-admin users: false → private project for themselves,
+   * true → suggest the project to the admin for public review.
+   */
+  suggest: z.boolean().optional(),
+});
+
+export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+
+export const updateProjectSchema = z.object({
+  name: z.string().trim().min(1).max(PROJECT_NAME_MAX_LENGTH).optional(),
+  description: z.string().trim().max(PROJECT_DESCRIPTION_MAX_LENGTH).nullish(),
+  visibility: z.enum([PROJECT_VISIBILITY.PUBLIC, PROJECT_VISIBILITY.PRIVATE]).optional(),
+});
+
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+
+const tagNamesSchema = z
+  .array(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH))
+  .max(MAX_TAGS_PER_ACTIVITY);
+
+/** Timer start: title, description, optional project and tags. */
 export const timerStartSchema = z.object({
   title: titleSchema,
   description: descriptionSchema,
+  projectId: z.number().int().positive().nullish(),
+  tags: tagNamesSchema.optional(),
+});
+
+export const tagListQuerySchema = z.object({
+  q: z.string().trim().max(TAG_NAME_MAX_LENGTH).optional(),
 });
 
 /* ------------------------------------------------------------------ */
@@ -97,6 +141,8 @@ export const rangeActivitySchema = z.object({
   start: localDatetimeSchema,
   end: localDatetimeSchema,
   allowOverlap: z.boolean().optional().default(false),
+  projectId: z.number().int().positive().nullish(),
+  tags: tagNamesSchema.optional(),
 });
 
 /** Manual duration entry. No timestamps are required. */
@@ -108,6 +154,8 @@ export const durationActivitySchema = z.object({
   durationSeconds: z.number().int().min(1).max(24 * 60 * 60),
   /** Local grouping date (defaults to today in the application timezone). */
   occurredOn: localDateSchema.optional(),
+  projectId: z.number().int().positive().nullish(),
+  tags: tagNamesSchema.optional(),
 });
 
 /** Timer stop: client may pass the same title/description it started with. */
@@ -135,6 +183,8 @@ export const updateActivitySchema = z.object({
   durationSeconds: z.number().int().min(1).max(24 * 60 * 60).optional(),
   occurredOn: localDateSchema.optional(),
   allowOverlap: z.boolean().optional().default(false),
+  projectId: z.number().int().positive().nullish(),
+  tags: tagNamesSchema.optional(),
 });
 
 export type UpdateActivityInput = z.infer<typeof updateActivitySchema>;
@@ -145,6 +195,9 @@ export const activityListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   from: localDateSchema.optional(),
   to: localDateSchema.optional(),
+  projectId: z.coerce.number().int().positive().optional(),
+  /** Filter by exact tag name. */
+  tag: z.string().trim().max(TAG_NAME_MAX_LENGTH).optional(),
   /** Admin (or all_users visibility) only. */
   userId: z.coerce.number().int().positive().optional(),
 });

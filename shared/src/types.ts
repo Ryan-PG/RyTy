@@ -11,6 +11,7 @@ export interface User {
   language?: Language | null;
   theme?: Theme | null;
   timezone?: string | null;
+  defaultProjectId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,8 +31,32 @@ export interface Activity {
   durationSeconds: number;
   /** Local grouping date, YYYY-MM-DD, in the application timezone. */
   occurredOn: string;
+  project: { id: number; name: string } | null;
+  /** Tag names attached to this activity. */
+  tags: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** Project record as returned by the API. */
+export interface Project {
+  id: number;
+  name: string;
+  description: string | null;
+  visibility: "public" | "private";
+  /** "suggested" projects await admin review before becoming public. */
+  status: "active" | "suggested";
+  createdBy: number;
+  /** Populated by the API for admins and project owners. */
+  creatorUsername?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Tag record as returned by the API. */
+export interface Tag {
+  id: number;
+  name: string;
 }
 
 /** Active timer state as returned by the API. */
@@ -46,6 +71,9 @@ export interface ActiveTimer {
   accumulatedSeconds: number;
   /** ISO-8601 UTC timestamp of the very first start. */
   startedAt: string;
+  project: { id: number; name: string } | null;
+  /** Tag names chosen at start; applied to the activity on stop. */
+  tags: string[];
 }
 
 export interface AuthUser extends User {
@@ -54,6 +82,8 @@ export interface AuthUser extends User {
   /** Effective UI timezone preference (personal, else app default). */
   timezone: string;
   theme: Theme;
+  /** The user's default project (must be one they can access). */
+  defaultProjectId: number | null;
 }
 
 export interface AppSettings {
@@ -88,6 +118,8 @@ export interface ReportSummary {
   byDay: { date: string; totalSeconds: number; count: number }[];
   /** Aggregated per user (subject to visibility rules). */
   byUser: { userId: number; username: string; totalSeconds: number; count: number }[];
+  /** Aggregated per project (untitled activities grouped as "No project"). */
+  byProject: { projectId: number | null; projectName: string; totalSeconds: number; count: number }[];
   /** Aggregated per activity title (top entries). */
   byTitle: { title: string; totalSeconds: number; count: number }[];
 }

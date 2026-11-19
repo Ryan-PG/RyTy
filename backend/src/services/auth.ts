@@ -32,6 +32,7 @@ type AuthUserSource = {
   language?: string | null;
   theme?: string | null;
   timezone?: string | null;
+  defaultProjectId?: number | null;
 };
 
 /**
@@ -55,6 +56,7 @@ export async function toAuthUser(services: Services, user: AuthUserSource): Prom
     language: language as AuthUser["language"],
     timezone,
     theme: theme as AuthUser["theme"],
+    defaultProjectId: user.defaultProjectId ?? null,
   };
 }
 

@@ -14,6 +14,8 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
     endedAt: "2026-11-19T10:00:00.000Z",
     durationSeconds: 3600,
     occurredOn: "2026-11-19",
+    project: null,
+    tags: [],
     createdAt: "2026-11-19T10:00:00.000Z",
     updatedAt: "2026-11-19T10:00:00.000Z",
     ...overrides,
@@ -31,7 +33,7 @@ describe("CSV export", () => {
   it("starts with a UTF-8 BOM and includes headers", () => {
     const csv = activitiesToCsv([]);
     expect(csv.charCodeAt(0)).toBe(0xfeff);
-    expect(csv).toContain("occurred_on,username,title");
+    expect(csv).toContain("occurred_on,username,project,title");
   });
 
   it("keeps Persian text intact", () => {

@@ -7,6 +7,8 @@ import { activityRoutes } from "./routes/activities";
 import { timerRoutes } from "./routes/timer";
 import { reportRoutes } from "./routes/reports";
 import { adminRoutes } from "./routes/admin";
+import { projectRoutes } from "./routes/projects";
+import { tagRoutes } from "./routes/tags";
 import { requireAuth, requireAdmin, blockUntilPasswordChanged } from "./middleware/auth";
 import { getSetupStatus } from "./services/auth";
 import { HttpError } from "./utils/http";
@@ -67,6 +69,8 @@ export function createApp(env: RuntimeEnv): Hono {
   protectedApi.route("/activities", activityRoutes());
   protectedApi.route("/timer", timerRoutes());
   protectedApi.route("/reports", reportRoutes());
+  protectedApi.route("/projects", projectRoutes());
+  protectedApi.route("/tags", tagRoutes());
 
   // Minimal user list for report filters. Allowed for admins, and for all
   // users when report visibility is "all_users".

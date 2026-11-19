@@ -42,6 +42,7 @@ export function summarizeActivities(
   const byDay = new Map<string, { totalSeconds: number; count: number }>();
   const byUser = new Map<number, { username: string; totalSeconds: number; count: number }>();
   const byTitle = new Map<string, { totalSeconds: number; count: number }>();
+  const byProject = new Map<string, { projectId: number | null; projectName: string; totalSeconds: number; count: number }>();
 
   let totalSeconds = 0;
   for (const activity of activities) {
@@ -65,6 +66,17 @@ export function summarizeActivities(
     titleEntry.totalSeconds += activity.durationSeconds;
     titleEntry.count += 1;
     byTitle.set(activity.title, titleEntry);
+
+    const projectKey = activity.project?.id ?? "none";
+    const projectEntry = byProject.get(String(projectKey)) ?? {
+      projectId: activity.project?.id ?? null,
+      projectName: activity.project?.name ?? "",
+      totalSeconds: 0,
+      count: 0,
+    };
+    projectEntry.totalSeconds += activity.durationSeconds;
+    projectEntry.count += 1;
+    byProject.set(String(projectKey), projectEntry);
   }
 
   return {
@@ -78,6 +90,7 @@ export function summarizeActivities(
     byUser: [...byUser.entries()]
       .map(([userId, v]) => ({ userId, ...v }))
       .sort((a, b) => b.totalSeconds - a.totalSeconds),
+    byProject: [...byProject.values()].sort((a, b) => b.totalSeconds - a.totalSeconds),
     byTitle: [...byTitle.entries()]
       .map(([title, v]) => ({ title, ...v }))
       .sort((a, b) => b.totalSeconds - a.totalSeconds)
@@ -98,8 +111,10 @@ export function activitiesToCsv(activities: Activity[]): string {
   const header = [
     "occurred_on",
     "username",
+    "project",
     "title",
     "description",
+    "tags",
     "entry_type",
     "started_at_utc",
     "ended_at_utc",
@@ -114,8 +129,10 @@ export function activitiesToCsv(activities: Activity[]): string {
       [
         a.occurredOn,
         a.username ?? String(a.userId),
+        a.project?.name ?? "",
         a.title,
         a.description ?? "",
+        a.tags.join(" "),
         a.entryType,
         a.startedAt ?? "",
         a.endedAt ?? "",

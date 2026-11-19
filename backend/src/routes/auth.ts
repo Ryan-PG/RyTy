@@ -81,6 +81,7 @@ export function authRoutes(): Hono {
       language: row.language,
       theme: row.theme,
       timezone: row.timezone,
+      defaultProjectId: row.defaultProjectId,
     });
     c.header("Set-Cookie", sessionCookieHeader(token, c.req.raw));
     return c.json({ data: authUser });
@@ -160,11 +161,17 @@ export function authRoutes(): Hono {
     if (body.timezone) {
       ensureValidTimezone(body.timezone);
     }
+    if (body.defaultProjectId != null) {
+      // Must be a project the user can actually use.
+      const { canUseProject } = await import("../services/project");
+      await canUseProject(services, user, body.defaultProjectId);
+    }
 
     await services.users.update(user.id, {
       language: body.language ?? undefined,
       theme: body.theme ?? undefined,
       timezone: body.timezone ?? undefined,
+      defaultProjectId: body.defaultProjectId,
     });
     const updated = await services.users.findById(user.id);
     return c.json({ data: await toAuthUser(services, updated!) });

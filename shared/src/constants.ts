@@ -28,6 +28,27 @@ export const REPORT_VISIBILITY = {
 export type ReportVisibility =
   (typeof REPORT_VISIBILITY)[keyof typeof REPORT_VISIBILITY];
 
+export const PROJECT_VISIBILITY = {
+  PUBLIC: "public",
+  PRIVATE: "private",
+} as const;
+
+export type ProjectVisibility =
+  (typeof PROJECT_VISIBILITY)[keyof typeof PROJECT_VISIBILITY];
+
+export const PROJECT_STATUS = {
+  ACTIVE: "active",
+  SUGGESTED: "suggested",
+} as const;
+
+export type ProjectStatus =
+  (typeof PROJECT_STATUS)[keyof typeof PROJECT_STATUS];
+
+export const PROJECT_NAME_MAX_LENGTH = 80;
+export const PROJECT_DESCRIPTION_MAX_LENGTH = 500;
+export const TAG_NAME_MAX_LENGTH = 40;
+export const MAX_TAGS_PER_ACTIVITY = 12;
+
 /** Settings keys stored in the `settings` table with their default values. */
 export const SETTINGS_DEFAULTS = {
   app_name: "RyTy",

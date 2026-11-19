@@ -5,7 +5,7 @@ import {
   updateActivitySchema,
 } from "@ryty/shared";
 import { parseJson, parseQuery } from "../validators/validate";
-import { createActivity, getOwnedActivity, updateActivity } from "../services/activity";
+import { createActivity, getOwnedActivity, updateActivity, withTagNames } from "../services/activity";
 import { HttpError } from "../utils/http";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, REPORT_VISIBILITY } from "@ryty/shared";
 import type { Paginated, Activity } from "@ryty/shared";
@@ -32,6 +32,7 @@ export function activityRoutes(): Hono {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE;
     const { data, total } = await services.activities.list(query, scope);
+    await withTagNames(services, data);
     const payload: Paginated<Activity> = {
       data,
       page,
@@ -48,6 +49,7 @@ export function activityRoutes(): Hono {
     const appSettings = await services.settings.getAppSettings();
     try {
       const activity = await createActivity(services, user, input, appSettings.defaultTimezone);
+      await withTagNames(services, [activity]);
       return c.json({ data: activity }, 201);
     } catch (err) {
       if (err instanceof HttpError && err.code === "activity_overlap") {
@@ -71,6 +73,7 @@ export function activityRoutes(): Hono {
     const user = c.get("user");
     const id = Number(c.req.param("id"));
     const activity = await getOwnedActivity(services, user, id);
+    await withTagNames(services, [activity]);
     return c.json({ data: activity });
   });
 
@@ -82,6 +85,7 @@ export function activityRoutes(): Hono {
     const appSettings = await services.settings.getAppSettings();
     try {
       const activity = await updateActivity(services, user, id, input, appSettings.defaultTimezone);
+      await withTagNames(services, [activity]);
       return c.json({ data: activity });
     } catch (err) {
       if (err instanceof HttpError && err.code === "activity_overlap") {

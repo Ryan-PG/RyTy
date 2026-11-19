@@ -1,4 +1,11 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  index,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core";
 
 /**
  * Drizzle schema shared by both deployment targets.
@@ -7,6 +14,23 @@ import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqli
  * seconds; `occurred_on` as a local calendar date (YYYY-MM-DD) derived in
  * the application timezone.
  */
+
+export const projects = sqliteTable("projects", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  visibility: text("visibility").notNull(), // "public" | "private"
+  status: text("status").notNull(), // "active" | "suggested"
+  createdBy: integer("created_by")
+    .notNull()
+    .references((): AnySQLiteColumn => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (t) => [
+  uniqueIndex("idx_projects_name").on(t.name),
+  index("idx_projects_visibility").on(t.visibility, t.status),
+  index("idx_projects_created_by").on(t.createdBy),
+]);
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -21,10 +45,25 @@ export const users = sqliteTable("users", {
   language: text("language"),
   theme: text("theme"),
   timezone: text("timezone"),
+  defaultProjectId: integer("default_project_id").references(
+    (): AnySQLiteColumn => projects.id,
+    { onDelete: "set null" },
+  ),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (t) => [
   uniqueIndex("idx_users_username").on(t.username),
+]);
+
+export const tags = sqliteTable("tags", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  createdBy: integer("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull(),
+}, (t) => [
+  uniqueIndex("idx_tags_name").on(t.name),
 ]);
 
 export const activities = sqliteTable("activities", {
@@ -39,12 +78,28 @@ export const activities = sqliteTable("activities", {
   endedAt: text("ended_at"),
   durationSeconds: integer("duration_seconds").notNull(),
   occurredOn: text("occurred_on").notNull(), // YYYY-MM-DD (app timezone)
+  projectId: integer("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (t) => [
   index("idx_activities_user_occurred").on(t.userId, t.occurredOn),
   index("idx_activities_started").on(t.startedAt),
   index("idx_activities_ended").on(t.endedAt),
+  index("idx_activities_project").on(t.projectId),
+]);
+
+/** Many-to-many between activities and public tags. */
+export const activityTags = sqliteTable("activity_tags", {
+  activityId: integer("activity_id")
+    .notNull()
+    .references(() => activities.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => tags.id, { onDelete: "cascade" }),
+}, (t) => [
+  index("idx_activity_tags_tag").on(t.tagId),
 ]);
 
 export const sessions = sqliteTable("sessions", {
@@ -63,7 +118,8 @@ export const sessions = sqliteTable("sessions", {
 /**
  * One row per user's active timer. `segment_started_at` is the start of the
  * current running segment (null while paused). Stopping a timer converts it
- * into an activity row and deletes the timer row.
+ * into an activity row and deletes the timer row. Tags chosen at start are
+ * kept as a JSON array of names and converted on stop.
  */
 export const timers = sqliteTable("timers", {
   userId: integer("user_id")
@@ -75,6 +131,10 @@ export const timers = sqliteTable("timers", {
   segmentStartedAt: text("segment_started_at"),
   accumulatedSeconds: integer("accumulated_seconds").notNull().default(0),
   startedAt: text("started_at").notNull(), // first start (UTC ISO)
+  projectId: integer("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  tags: text("tags"), // JSON array of tag names
   updatedAt: text("updated_at").notNull(),
 });
 

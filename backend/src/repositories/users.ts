@@ -15,6 +15,7 @@ function toUser(row: UserRow): User {
     language: (row.language as User["language"]) ?? null,
     theme: (row.theme as User["theme"]) ?? null,
     timezone: row.timezone,
+    defaultProjectId: row.defaultProjectId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -36,6 +37,7 @@ export interface UpdateUserPatch {
   language?: string | null;
   theme?: string | null;
   timezone?: string | null;
+  defaultProjectId?: number | null;
 }
 
 export function createUserRepository(db: AppDatabase) {
@@ -97,6 +99,7 @@ export function createUserRepository(db: AppDatabase) {
       if (patch.language !== undefined) values.language = patch.language;
       if (patch.theme !== undefined) values.theme = patch.theme;
       if (patch.timezone !== undefined) values.timezone = patch.timezone;
+      if (patch.defaultProjectId !== undefined) values.defaultProjectId = patch.defaultProjectId;
       const [row] = await db.update(users).set(values).where(eq(users.id, id)).returning();
       return row ? toUser(row) : null;
     },

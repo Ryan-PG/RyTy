@@ -1,11 +1,11 @@
 import { and, asc, count, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
-import { activities, users } from "../database/schema";
+import { activities, projects, users } from "../database/schema";
 import type { AppDatabase } from "../database/adapter";
 import type { Activity, ActivityListQuery, EntryType } from "@ryty/shared";
 
 type ActivityRow = typeof activities.$inferSelect;
 
-function toActivity(row: ActivityRow, username?: string | null): Activity {
+function toActivity(row: ActivityRow, username?: string | null, projectName?: string | null): Activity {
   const activity: Activity = {
     id: row.id,
     userId: row.userId,
@@ -16,6 +16,10 @@ function toActivity(row: ActivityRow, username?: string | null): Activity {
     endedAt: row.endedAt,
     durationSeconds: row.durationSeconds,
     occurredOn: row.occurredOn,
+    project: row.projectId
+      ? { id: row.projectId, name: projectName ?? "" }
+      : null,
+    tags: [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -32,6 +36,7 @@ export interface CreateActivityInput {
   endedAt: string | null;
   durationSeconds: number;
   occurredOn: string;
+  projectId: number | null;
 }
 
 export interface UpdateActivityPatch {
@@ -41,23 +46,30 @@ export interface UpdateActivityPatch {
   endedAt?: string | null;
   durationSeconds?: number;
   occurredOn?: string;
+  projectId?: number | null;
 }
 
 export function createActivityRepository(db: AppDatabase) {
   return {
     async findById(id: number): Promise<Activity | null> {
-      const [row] = await db.select().from(activities).where(eq(activities.id, id)).limit(1);
-      return row ? toActivity(row) : null;
+      const [row] = await db
+        .select({ activity: activities, projectName: projects.name })
+        .from(activities)
+        .leftJoin(projects, eq(projects.id, activities.projectId))
+        .where(eq(activities.id, id))
+        .limit(1);
+      return row ? toActivity(row.activity, undefined, row.projectName) : null;
     },
 
     async findByIdWithUser(id: number): Promise<Activity | null> {
       const [row] = await db
-        .select({ activity: activities, username: users.username })
+        .select({ activity: activities, username: users.username, projectName: projects.name })
         .from(activities)
         .leftJoin(users, eq(users.id, activities.userId))
+        .leftJoin(projects, eq(projects.id, activities.projectId))
         .where(eq(activities.id, id))
         .limit(1);
-      return row ? toActivity(row.activity, row.username) : null;
+      return row ? toActivity(row.activity, row.username, row.projectName) : null;
     },
 
     /**
@@ -85,13 +97,24 @@ export function createActivityRepository(db: AppDatabase) {
       }
       if (query.from) conditions.push(gte(activities.occurredOn, query.from));
       if (query.to) conditions.push(lte(activities.occurredOn, query.to));
+      if (query.projectId) conditions.push(eq(activities.projectId, query.projectId));
+      if (query.tag) {
+        conditions.push(
+          sql`EXISTS (
+            SELECT 1 FROM activity_tags at
+            JOIN tags t ON t.id = at.tag_id
+            WHERE at.activity_id = ${activities.id} AND lower(t.name) = lower(${query.tag})
+          )`,
+        );
+      }
 
       const where = conditions.length > 0 ? and(...conditions) : undefined;
 
       const rows = await db
-        .select({ activity: activities, username: users.username })
+        .select({ activity: activities, username: users.username, projectName: projects.name })
         .from(activities)
         .leftJoin(users, eq(users.id, activities.userId))
+        .leftJoin(projects, eq(projects.id, activities.projectId))
         .where(where)
         .orderBy(desc(activities.occurredOn), desc(activities.startedAt), desc(activities.id))
         .limit(pageSize)
@@ -103,7 +126,7 @@ export function createActivityRepository(db: AppDatabase) {
         .where(where);
 
       return {
-        data: rows.map((r) => toActivity(r.activity, r.username)),
+        data: rows.map((r) => toActivity(r.activity, r.username, r.projectName)),
         total: totalRow?.value ?? 0,
       };
     },
@@ -125,11 +148,12 @@ export function createActivityRepository(db: AppDatabase) {
         conditions.push(sql`${activities.id} <> ${excludeActivityId}`);
       }
       const rows = await db
-        .select()
+        .select({ activity: activities, projectName: projects.name })
         .from(activities)
+        .leftJoin(projects, eq(projects.id, activities.projectId))
         .where(and(...conditions))
         .orderBy(asc(activities.startedAt));
-      return rows.map((r) => toActivity(r));
+      return rows.map((r) => toActivity(r.activity, undefined, r.projectName));
     },
 
     /** Activities for a user within an occurred_on range (inclusive). */
@@ -147,12 +171,13 @@ export function createActivityRepository(db: AppDatabase) {
         return [];
       }
       const rows = await db
-        .select({ activity: activities, username: users.username })
+        .select({ activity: activities, username: users.username, projectName: projects.name })
         .from(activities)
         .leftJoin(users, eq(users.id, activities.userId))
+        .leftJoin(projects, eq(projects.id, activities.projectId))
         .where(and(...conditions))
         .orderBy(asc(activities.occurredOn), asc(activities.startedAt));
-      return rows.map((r) => toActivity(r.activity, r.username));
+      return rows.map((r) => toActivity(r.activity, r.username, r.projectName));
     },
 
     async create(input: CreateActivityInput): Promise<Activity> {
@@ -168,6 +193,7 @@ export function createActivityRepository(db: AppDatabase) {
           endedAt: input.endedAt,
           durationSeconds: input.durationSeconds,
           occurredOn: input.occurredOn,
+          projectId: input.projectId,
           createdAt: now,
           updatedAt: now,
         })
@@ -183,6 +209,7 @@ export function createActivityRepository(db: AppDatabase) {
       if (patch.endedAt !== undefined) values.endedAt = patch.endedAt;
       if (patch.durationSeconds !== undefined) values.durationSeconds = patch.durationSeconds;
       if (patch.occurredOn !== undefined) values.occurredOn = patch.occurredOn;
+      if (patch.projectId !== undefined) values.projectId = patch.projectId;
       const [row] = await db.update(activities).set(values).where(eq(activities.id, id)).returning();
       return row ? toActivity(row) : null;
     },
