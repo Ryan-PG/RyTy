@@ -37,7 +37,7 @@ function makeExpense(partial: Partial<Expense>): Expense {
 }
 
 describe("mergeRecent", () => {
-  it("interleaves activities and expenses newest-first across kinds", () => {
+  it("orders a day's timed entries before its date-only records", () => {
     const items = mergeRecent(
       [
         makeActivity({ id: 1, title: "Range", startedAt: "2026-11-20T05:30:00Z", endedAt: "2026-11-20T08:00:00Z" }),
@@ -48,14 +48,14 @@ describe("mergeRecent", () => {
       ],
     );
     expect(items.map((i) => (i.kind === "expense" ? i.expense.title : i.activity.title))).toEqual([
-      "Later expense",
       "Range",
+      "Later expense",
       "Earlier expense",
     ]);
-    expect(items.map((i) => i.kind)).toEqual(["expense", "activity", "expense"]);
+    expect(items.map((i) => i.kind)).toEqual(["activity", "expense", "expense"]);
   });
 
-  it("places duration-only entries last within their local day", () => {
+  it("places duration-only entries after timed entries of the same day", () => {
     const items = mergeRecent(
       [
         makeActivity({ id: 1, title: "Timed", startedAt: "2026-11-20T07:00:00Z", endedAt: "2026-11-20T08:00:00Z" }),
@@ -66,6 +66,22 @@ describe("mergeRecent", () => {
     expect(items.map((i) => (i.kind === "activity" ? i.activity.title : ""))).toEqual([
       "Timed",
       "Duration only",
+    ]);
+  });
+
+  it("files a backdated expense under its own day, never above newer days", () => {
+    // Recorded on 2026-11-20 but dated 2026-11-19 — the reported bug shape.
+    const items = mergeRecent(
+      [
+        makeActivity({ id: 1, title: "Today range", occurredOn: "2026-11-20", startedAt: "2026-11-20T07:00:00Z", endedAt: "2026-11-20T09:00:00Z" }),
+        makeActivity({ id: 2, title: "Yesterday range", occurredOn: "2026-11-19", startedAt: "2026-11-19T10:00:00Z", endedAt: "2026-11-19T12:00:00Z" }),
+      ],
+      [makeExpense({ id: 3, title: "Backdated expense", occurredOn: "2026-11-19", createdAt: "2026-11-20T18:00:00Z" })],
+    );
+    expect(items.map((i) => (i.kind === "expense" ? i.expense.title : i.activity.title))).toEqual([
+      "Today range",
+      "Yesterday range",
+      "Backdated expense",
     ]);
   });
 
