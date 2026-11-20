@@ -9,7 +9,7 @@
 **ردیابی ساده و سریع فعالیت و زمان تیم — موبایل‌محور و کم‌حجم**
 
 [![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue?logo=githubactions)](.github/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-97%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-informational)
 ![i18n](https://img.shields.io/badge/i18n-English%20%7C%20%D9%81%D8%A7%D8%B1%D8%B3%DB%8C-blueviolet)
 

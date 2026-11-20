@@ -35,6 +35,10 @@
   --success: #047857;
   --success-soft: #e3f4ec;
 
+  /* Entry types (Recent list edge): task = yellow, expense = blue */
+  --task: #eab308;
+  --expense: #2563eb;
+
   /* Geometry */
   --radius: 8px;
   --radius-sm: 6px;
@@ -63,6 +67,9 @@
   --warning-soft: #33291a;
   --success: #34b387;
   --success-soft: #1b3328;
+
+  --task: #facc15;
+  --expense: #4d8bf5;
 }
 
 @theme inline {
@@ -84,6 +91,8 @@
   --color-warning-soft: var(--warning-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-task: var(--task);
+  --color-expense: var(--expense);
 
   --radius-base: var(--radius);
   --radius-sm2: var(--radius-sm);

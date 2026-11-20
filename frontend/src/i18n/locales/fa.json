@@ -77,7 +77,8 @@
   "tags": {
     "title": "برچسب‌ها",
     "placeholder": "برچسب را بنویسید و با , اضافه کنید",
-    "placeholderShort": "افزودن برچسب — با , ثبت شود"
+    "placeholderShort": "افزودن برچسب — با , ثبت شود",
+    "hint": "برچسب‌ها عمومی هستند — همه می‌توانند آن‌ها را به فعالیت‌ها بچسبانند."
   },
   "coops": {
     "title": "همکاران",
@@ -157,7 +158,7 @@
     "todayTotal": "امروز",
     "todayActivities": "{{count}} فعالیت",
     "oneActivity": "۱ فعالیت",
-    "noActivitiesToday": "امروز هنوز چیزی ثبت نشده است.",
+    "nothingRecorded": "هنوز چیزی ثبت نشده است.",
     "recent": "اخیر",
     "viewAll": "دیدن همه",
     "rangeEntry": "بازه زمانی",

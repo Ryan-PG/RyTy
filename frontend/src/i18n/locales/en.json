@@ -77,7 +77,8 @@
   "tags": {
     "title": "Tags",
     "placeholder": "Type a tag, then press , to add",
-    "placeholderShort": "Add tags — comma to add"
+    "placeholderShort": "Add tags — comma to add",
+    "hint": "Tags are public — everyone can attach them to activities."
   },
   "coops": {
     "title": "Co-doers",
@@ -157,7 +158,7 @@
     "todayTotal": "Today",
     "todayActivities": "{{count}} activities",
     "oneActivity": "1 activity",
-    "noActivitiesToday": "Nothing recorded yet today.",
+    "nothingRecorded": "Nothing recorded yet.",
     "recent": "Recent",
     "viewAll": "View all",
     "rangeEntry": "Time range",

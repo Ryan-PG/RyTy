@@ -3,23 +3,28 @@ import { FolderKanban, Users } from "lucide-react";
 import type { Activity } from "@ryty/shared";
 import { Badge } from "./ui";
 import { useAuth } from "../stores/AuthContext";
-import { formatDurationCompact, formatUtcRange } from "../utils/format";
+import { formatDurationCompact, formatLocalDate, formatUtcRange } from "../utils/format";
 /** One compact, scannable activity row: title, meta, duration. */
 export function ActivityRow({
   activity,
   timezone,
   showUser = false,
+  showDate = false,
+  className = "",
 }: {
   activity: Activity;
   timezone: string;
   showUser?: boolean;
+  /** Prefix the meta line with the activity's local day (e.g. mixed lists that span days). */
+  showDate?: boolean;
+  className?: string;
 }) {
   const { t } = useTranslation();
   const { language, user } = useAuth();
   const showOwner = showUser || (activity.username !== undefined && activity.userId !== user?.id);
 
   return (
-    <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+    <div className={`flex items-center justify-between gap-3 px-3.5 py-2.5 ${className}`}>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate text-sm font-medium text-text">{activity.title}</p>
@@ -55,6 +60,14 @@ export function ActivityRow({
           )}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+          {showDate && (
+            <>
+              <span className="shrink-0 tabular">
+                {formatLocalDate(activity.occurredOn, language, undefined, user?.dateFormat ?? "gregorian")}
+              </span>
+              <span aria-hidden>·</span>
+            </>
+          )}
           {activity.startedAt && activity.endedAt ? (
             <span dir="ltr" className="tabular">
               {formatUtcRange(activity.startedAt, activity.endedAt, timezone, language)}

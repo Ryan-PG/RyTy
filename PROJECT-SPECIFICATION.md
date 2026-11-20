@@ -181,9 +181,14 @@ reusable later via account settings.
 - **Dashboard** (home after login): compact greeting with today's full date
   (rendered with the configured Jalali/Gregorian calendar), prominent
   activity input, timer controls (pause/resume, stop, cancel), manual-entry
-  option, today's total, active-timer indication, recent activities. The
-  entry area is two tabs — **Task** and **Expense**. No big charts, admin
-  widgets, or card grids.
+  option, today's total, active-timer indication. The entry area is two tabs
+  — **Task** and **Expense**. On the Task tab, two large icon-led mode
+  buttons (**Duration only** / **Time range**) sit above the timer. Below
+  the entry area, a single mixed **Recent** timeline shows today's tasks and
+  expenses on both tabs (falls back to the latest 15 entries, dated, when
+  nothing was recorded today); each row carries a colored start edge —
+  yellow for tasks, blue for expenses. No big charts, admin widgets, or
+  card grids.
 - **Progressive disclosure**: reports, admin, settings in secondary
   navigation only.
 - **Themes**: light, dark, system; persisted per user; design tokens

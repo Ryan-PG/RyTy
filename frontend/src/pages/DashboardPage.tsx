@@ -1,25 +1,30 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, Pause, Play, Plus, Square } from "lucide-react";
-import type { Activity } from "@ryty/shared";
+import { CalendarDays, CalendarRange, Pause, Play, Square, Timer } from "lucide-react";
+import type { Expense } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
 import { useTimer } from "../stores/TimerContext";
 import { useToast } from "../stores/ToastContext";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Segmented, Spinner, Textarea } from "../components/ui";
+import { Badge, Button, Card, ConfirmDialog, Input, Segmented, Spinner, Textarea } from "../components/ui";
 import { ActivityFormModal } from "../components/ActivityFormModal";
 import { ExpenseSection } from "../components/ExpenseSection";
-import { ActivityRow } from "../components/ActivityRow";
+import { RecentList } from "../components/RecentList";
 import { ProjectPicker } from "../components/ProjectPicker";
 import { TagInput } from "../components/TagInput";
 import { CoopPicker } from "../components/CoopPicker";
-import { formatDuration, formatDurationCompact, formatToday, greetingByHour, localHourIn } from "../utils/format";
+import { formatDuration, formatDurationCompact, formatToday, greetingByHour, localHourIn, todayIn } from "../utils/format";
+import { mergeRecent, type RecentItem } from "../utils/recent";
+
+/** Rows shown in the Home "Recent" timeline. */
+const RECENT_LIMIT = 15;
 
 /**
- * Home screen: quick activity entry first. Timer input leads; manual entry,
- * today's total and recent activities support it. Nothing else competes.
+ * Home screen: quick activity entry first. Manual-entry modes lead, the
+ * timer input follows, and a single mixed "Recent" timeline (today's
+ * tasks and expenses) supports both entry tabs. Nothing else competes.
  */
 export function DashboardPage() {
   const { t } = useTranslation();
@@ -41,32 +46,61 @@ export function DashboardPage() {
   const [entryTab, setEntryTab] = useState<"task" | "expense">("task");
 
   const [today, setToday] = useState<{ totalSeconds: number; count: number } | null>(null);
-  const [recent, setRecent] = useState<Activity[]>([]);
+  const [recent, setRecent] = useState<RecentItem[]>([]);
+  const [recentFromPast, setRecentFromPast] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [initialMode, setInitialMode] = useState<"range" | "duration">("range");
+  const [expenseEditRequest, setExpenseEditRequest] = useState<Expense | null>(null);
 
   const timezone = user?.timezone ?? "UTC";
 
   const loadSummary = useCallback(async () => {
     try {
-      const date = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+      const date = todayIn(timezone);
       const summary = await api.reportSummary({ from: date, to: date });
       setToday({ totalSeconds: summary.totalSeconds, count: summary.activityCount });
-      const page = await api.listActivities({ page: 1, pageSize: 5 });
-      setRecent(page.data);
     } catch {
-      // dashboard summary is non-critical
+      // today's total is non-critical
+    }
+  }, [timezone]);
+
+  const loadRecent = useCallback(async () => {
+    try {
+      const date = todayIn(timezone);
+      const [acts, exps] = await Promise.all([
+        api.listActivities({ page: 1, pageSize: RECENT_LIMIT, from: date, to: date }),
+        api.listExpenses({ page: 1, pageSize: RECENT_LIMIT, from: date, to: date }),
+      ]);
+      let items = mergeRecent(acts.data, exps.data);
+      let fromPast = false;
+      // Nothing recorded today → fall back to the latest entries, any day.
+      if (items.length === 0) {
+        const [latestActs, latestExps] = await Promise.all([
+          api.listActivities({ page: 1, pageSize: RECENT_LIMIT }),
+          api.listExpenses({ page: 1, pageSize: RECENT_LIMIT }),
+        ]);
+        items = mergeRecent(latestActs.data, latestExps.data);
+        fromPast = true;
+      }
+      setRecent(items.slice(0, RECENT_LIMIT));
+      setRecentFromPast(fromPast);
+    } catch {
+      // the recent list is non-critical
     }
   }, [timezone]);
 
   useEffect(() => {
     void loadSummary();
-  }, [loadSummary]);
+    void loadRecent();
+  }, [loadSummary, loadRecent]);
 
-  // Refresh the recent list when a timer is stopped into an activity.
+  // Refresh totals and the recent list when a timer is stopped or cancelled.
   useEffect(() => {
-    if (!active) void loadSummary();
-  }, [active, loadSummary]);
+    if (!active) {
+      void loadSummary();
+      void loadRecent();
+    }
+  }, [active, loadSummary, loadRecent]);
 
   const onStart = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,6 +161,11 @@ export function DashboardPage() {
         : "dashboard.greetingEvening",
   );
 
+  const openManual = (mode: "range" | "duration") => {
+    setInitialMode(mode);
+    setManualOpen(true);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -168,9 +207,37 @@ export function DashboardPage() {
       </div>
 
       {entryTab === "expense" ? (
-        <ExpenseSection />
+        <ExpenseSection
+          editRequest={expenseEditRequest}
+          onEditConsumed={() => setExpenseEditRequest(null)}
+          onChanged={() => void loadRecent()}
+        />
       ) : (
         <>
+      {/* Manual entry modes: big, icon-led choices above the timer. */}
+      <div role="group" aria-label={t("dashboard.manualEntryTitle")} className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className="flex h-14 items-center justify-center gap-3 rounded-[var(--radius-lg)] border border-border bg-surface px-3 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-2"
+          onClick={() => openManual("duration")}
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius)] bg-accent-soft text-accent">
+            <Timer className="size-4.5" aria-hidden />
+          </span>
+          {t("dashboard.durationEntry")}
+        </button>
+        <button
+          type="button"
+          className="flex h-14 items-center justify-center gap-3 rounded-[var(--radius-lg)] border border-border bg-surface px-3 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-2"
+          onClick={() => openManual("range")}
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius)] bg-accent-soft text-accent">
+            <CalendarRange className="size-4.5" aria-hidden />
+          </span>
+          {t("dashboard.rangeEntry")}
+        </button>
+      </div>
+
       {/* Primary action: timer */}
       {loading ? (
         <Card className="flex items-center justify-center p-6">
@@ -276,31 +343,20 @@ export function DashboardPage() {
         </Card>
       )}
 
-      {/* Secondary action: manual entry */}
-      <div className="flex gap-2">
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setInitialMode("range");
-            setManualOpen(true);
-          }}
-        >
-          <Plus className="size-4" aria-hidden />
-          {t("dashboard.rangeEntry")}
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setInitialMode("duration");
-            setManualOpen(true);
-          }}
-        >
-          <Plus className="size-4" aria-hidden />
-          {t("dashboard.durationEntry")}
-        </Button>
-      </div>
+      <ActivityFormModal
+        open={manualOpen}
+        onClose={() => {
+          setManualOpen(false);
+          void loadRecent();
+          void loadSummary();
+        }}
+        initialMode={initialMode}
+      />
+        </>
+      )}
 
-      {/* Recent activities */}
+      {/* Recent: today's tasks and expenses, identical on both entry tabs.
+          Falls back to the latest entries when nothing was recorded today. */}
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-muted">{t("dashboard.recent")}</h2>
@@ -308,27 +364,17 @@ export function DashboardPage() {
             {t("dashboard.viewAll")}
           </Link>
         </div>
-        {recent.length === 0 ? (
-          <EmptyState title={t("dashboard.noActivitiesToday")} />
-        ) : (
-          <Card className="divide-y divide-border overflow-hidden">
-            {recent.map((activity) => (
-              <ActivityRow key={activity.id} activity={activity} timezone={timezone} />
-            ))}
-          </Card>
-        )}
+        <RecentList
+          items={recent}
+          timezone={timezone}
+          showDates={recentFromPast}
+          onEditExpense={(expense) => {
+            setEntryTab("expense");
+            setExpenseEditRequest(expense);
+          }}
+          onChanged={() => void loadRecent()}
+        />
       </section>
-
-      <ActivityFormModal
-        open={manualOpen}
-        onClose={() => {
-          setManualOpen(false);
-          void loadSummary();
-        }}
-        initialMode={initialMode}
-      />
-        </>
-      )}
 
       <ConfirmDialog
         open={cancelOpen}
