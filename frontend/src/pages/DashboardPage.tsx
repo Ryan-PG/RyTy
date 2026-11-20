@@ -23,7 +23,7 @@ const RECENT_LIMIT = 20;
 
 /**
  * Home screen: quick activity entry first. Manual-entry modes lead, the
- * timer input follows, and a single mixed "Recent" timeline (today's
+ * timer input follows, and a single mixed "Recent" timeline (the latest
  * tasks and expenses) supports both entry tabs. Nothing else competes.
  */
 export function DashboardPage() {
@@ -47,7 +47,6 @@ export function DashboardPage() {
 
   const [today, setToday] = useState<{ totalSeconds: number; count: number } | null>(null);
   const [recent, setRecent] = useState<RecentItem[]>([]);
-  const [recentFromPast, setRecentFromPast] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [initialMode, setInitialMode] = useState<"range" | "duration">("range");
   const [expenseEditRequest, setExpenseEditRequest] = useState<Expense | null>(null);
@@ -66,28 +65,17 @@ export function DashboardPage() {
 
   const loadRecent = useCallback(async () => {
     try {
-      const date = todayIn(timezone);
+      // The latest entries of both kinds, regardless of their day — rows
+      // from earlier days carry their date in the list.
       const [acts, exps] = await Promise.all([
-        api.listActivities({ page: 1, pageSize: RECENT_LIMIT, from: date, to: date }),
-        api.listExpenses({ page: 1, pageSize: RECENT_LIMIT, from: date, to: date }),
+        api.listActivities({ page: 1, pageSize: RECENT_LIMIT }),
+        api.listExpenses({ page: 1, pageSize: RECENT_LIMIT }),
       ]);
-      let items = mergeRecent(acts.data, exps.data);
-      let fromPast = false;
-      // Nothing recorded today → fall back to the latest entries, any day.
-      if (items.length === 0) {
-        const [latestActs, latestExps] = await Promise.all([
-          api.listActivities({ page: 1, pageSize: RECENT_LIMIT }),
-          api.listExpenses({ page: 1, pageSize: RECENT_LIMIT }),
-        ]);
-        items = mergeRecent(latestActs.data, latestExps.data);
-        fromPast = true;
-      }
-      setRecent(items.slice(0, RECENT_LIMIT));
-      setRecentFromPast(fromPast);
+      setRecent(mergeRecent(acts.data, exps.data).slice(0, RECENT_LIMIT));
     } catch {
       // the recent list is non-critical
     }
-  }, [timezone]);
+  }, []);
 
   useEffect(() => {
     void loadSummary();
@@ -355,8 +343,8 @@ export function DashboardPage() {
         </>
       )}
 
-      {/* Recent: today's tasks and expenses, identical on both entry tabs.
-          Falls back to the latest entries when nothing was recorded today. */}
+      {/* Recent: the latest tasks and expenses, identical on both entry tabs.
+          Rows from earlier days carry their date. */}
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-muted">{t("dashboard.recent")}</h2>
@@ -367,7 +355,6 @@ export function DashboardPage() {
         <RecentList
           items={recent}
           timezone={timezone}
-          showDates={recentFromPast}
           onEditExpense={(expense) => {
             setEntryTab("expense");
             setExpenseEditRequest(expense);

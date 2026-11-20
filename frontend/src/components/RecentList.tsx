@@ -6,24 +6,23 @@ import { useToast } from "../stores/ToastContext";
 import { Card, ConfirmDialog, EmptyState } from "./ui";
 import { ActivityRow } from "./ActivityRow";
 import { ExpenseRow } from "./ExpenseRow";
+import { todayIn } from "../utils/format";
 import type { RecentItem } from "../utils/recent";
 
 /**
- * The Home "Recent" timeline: tasks and expenses in one list. The 3px
- * inline-start edge tells the two apart at a glance — task yellow, expense
- * blue — without extra badges or labels.
+ * The Home "Recent" timeline: the latest tasks and expenses in one list.
+ * The 3px inline-start edge tells the two apart at a glance — task yellow,
+ * expense blue — without extra badges or labels; rows from earlier days
+ * carry their date.
  */
 export function RecentList({
   items,
   timezone,
-  showDates = false,
   onEditExpense,
   onChanged,
 }: {
   items: RecentItem[];
   timezone: string;
-  /** Show each row's local day (set when the list falls back to past days). */
-  showDates?: boolean;
   /** Present when the parent can open the expense form for editing. */
   onEditExpense?: (expense: Expense) => void;
   /** Called after an expense row was deleted so the parent can refresh. */
@@ -31,6 +30,7 @@ export function RecentList({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const today = todayIn(timezone);
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -62,14 +62,14 @@ export function RecentList({
               key={`a-${item.activity.id}`}
               activity={item.activity}
               timezone={timezone}
-              showDate={showDates}
+              showDate={item.activity.occurredOn !== today}
               className="border-s-[3px] border-s-task"
             />
           ) : (
             <ExpenseRow
               key={`e-${item.expense.id}`}
               expense={item.expense}
-              showDate={showDates}
+              showDate={item.expense.occurredOn !== today}
               className="border-s-[3px] border-s-expense"
               onEdit={onEditExpense ? () => onEditExpense(item.expense) : undefined}
               onDelete={() => setDeleting(item.expense)}

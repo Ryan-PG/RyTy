@@ -56,7 +56,9 @@ the same visibility rules as activities (admins / `all_users` see the team;
 everyone else sees only their own). Only the owner can edit or delete an
 expense. Expenses also appear in the shared **Activities** history list —
 grouped by day next to tasks, marked by a blue start edge (tasks yellow) —
-and can be added from that page's entry dialog via its Expense tab.
+and can be added from that page's entry dialog via its Expense tab. Day
+groups always run newest → oldest regardless of when a record was created
+(an expense recorded today for yesterday stays in yesterday's group).
 
 ### 2.4 Projects & tags
 
@@ -186,9 +188,9 @@ reusable later via account settings.
   option, today's total, active-timer indication. The entry area is two tabs
   — **Task** and **Expense**. On the Task tab, two large icon-led mode
   buttons (**Duration only** / **Time range**) sit above the timer. Below
-  the entry area, a single mixed **Recent** timeline shows today's tasks and
-  expenses on both tabs (falls back to the latest 20 entries, dated, when
-  nothing was recorded today); each row carries a colored start edge —
+  the entry area, a single mixed **Recent** timeline shows the latest 20
+  tasks and expenses on both tabs — newest records first, rows from earlier
+  days carrying their date; each row carries a colored start edge —
   yellow for tasks, blue for expenses. No big charts, admin widgets, or
   card grids.
 - **Progressive disclosure**: reports, admin, settings in secondary

@@ -145,7 +145,9 @@ export function ActivitiesPage() {
       list.push(item);
       groups.set(date, list);
     }
-    return [...groups.entries()];
+    // Day groups always run newest → oldest, regardless of record time: an
+    // expense recorded today for yesterday must not drag its day above Today.
+    return [...groups.entries()].sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0));
   }, [activities, expenses]);
 
   const hasMore = activities.length < activitiesTotal || expenses.length < expensesTotal;
