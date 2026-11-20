@@ -48,10 +48,11 @@ overlap check.
 
 A second Home-page entry tab ("Task" / "Expense"). Expenses record **what
 was spent**: `title`, optional `description`, `amount`, and a grouping date.
-Amounts are stored as integer **minor units** (no floating-point money). The
-currency label (e.g. `TMN`, `IRR`, `USD`) is an application-wide admin
-setting shown next to every amount. Expenses support soft delete and the
-same visibility rules as activities (admins / `all_users` see the team;
+Amounts are stored as integer **minor units** (no floating-point money);
+the amount input groups the integer part in thousands (`1,234,567`) while
+typing. The currency label (e.g. `TMN`, `IRR`, `USD`) is an application-wide
+admin setting shown next to every amount. Expenses support soft delete and
+the same visibility rules as activities (admins / `all_users` see the team;
 everyone else sees only their own). Only the owner can edit or delete an
 expense.
 
@@ -174,6 +175,9 @@ reusable later via account settings.
 
 - **Mobile-first**: bottom navigation on mobile, restrained compact
   navigation on desktop; touch-friendly; no horizontal scrolling.
+- **App header**: shows today's date in the configured Jalali/Gregorian
+  calendar (full format on desktop, compact on mobile; the mobile chip
+  yields its space to the active-timer badge).
 - **Dashboard** (home after login): compact greeting with today's full date
   (rendered with the configured Jalali/Gregorian calendar), prominent
   activity input, timer controls (pause/resume, stop, cancel), manual-entry

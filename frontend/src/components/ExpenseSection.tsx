@@ -6,7 +6,7 @@ import { api, ApiError } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { useToast } from "../stores/ToastContext";
 import { Button, Card, ConfirmDialog, EmptyState, Field, Input, Spinner, Textarea } from "./ui";
-import { formatAmount, parseAmountToMinor, todayIn } from "../utils/format";
+import { formatAmount, formatAmountInput, parseAmountToMinor, todayIn } from "../utils/format";
 
 /**
  * Expense quick entry: an inline form (title, amount, date) above the
@@ -135,7 +135,7 @@ export function ExpenseSection() {
                 className="sm:w-36"
                 value={amountText}
                 placeholder="0.00"
-                onChange={(e) => setAmountText(e.target.value)}
+                onChange={(e) => setAmountText(formatAmountInput(e.target.value))}
               />
             </Field>
           </div>
@@ -235,7 +235,7 @@ export function ExpenseSection() {
                       onClick={() => {
                         setEditing(expense);
                         setTitle(expense.title);
-                        setAmountText(String(expense.amountMinor / 100));
+                        setAmountText(formatAmountInput(String(expense.amountMinor / 100)));
                         setDate(expense.occurredOn);
                         setDescription(expense.description ?? "");
                         setShowDescription(Boolean(expense.description));

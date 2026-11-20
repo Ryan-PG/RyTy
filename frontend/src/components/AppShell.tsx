@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Activity,
   BarChart3,
+  CalendarDays,
   Clock3,
   Home,
   LogOut,
@@ -12,6 +13,7 @@ import {
 import { useAuth } from "../stores/AuthContext";
 import { useTimer } from "../stores/TimerContext";
 import { Badge } from "./ui";
+import { formatLocalDate, formatToday, todayIn } from "../utils/format";
 
 function NavItem({
   to,
@@ -72,9 +74,13 @@ function MobileNavItem({
  */
 export function AppShell() {
   const { t } = useTranslation();
-  const { user, logout } = useAuth();
+  const { user, language, logout } = useAuth();
   const { active } = useTimer();
   const navigate = useNavigate();
+
+  const timezone = user?.timezone ?? "UTC";
+  const dateFormat = user?.dateFormat ?? "gregorian";
+  const today = todayIn(timezone);
 
   const items = [
     { to: "/", icon: <Home className="size-4.5" />, label: t("nav.dashboard") },
@@ -114,6 +120,13 @@ export function AppShell() {
                 </Badge>
               </NavLink>
             )}
+            {/* Today's date in the calendar chosen in Admin → Settings. */}
+            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-muted md:inline-flex">
+              <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+              <span className="whitespace-nowrap">
+                {formatToday(timezone, language, dateFormat)}
+              </span>
+            </span>
             <NavLink
               to="/account"
               className="flex items-center gap-2 rounded-[var(--radius)] px-2 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-text"
@@ -139,6 +152,16 @@ export function AppShell() {
           <img src="/favicon.svg" alt="" className="size-6" />
           RyTy
         </div>
+        {/* Compact date: short month/day + year; hidden while the timer
+            badge needs the room. */}
+        {!active && (
+          <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted">
+            <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+            <span className="truncate whitespace-nowrap">
+              {formatLocalDate(today, language, { year: "numeric", month: "short", day: "numeric" }, dateFormat)}
+            </span>
+          </span>
+        )}
         {active && (
           <NavLink to="/">
             <Badge tone="accent">

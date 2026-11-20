@@ -9,7 +9,7 @@
 **ردیابی ساده و سریع فعالیت و زمان تیم — موبایل‌محور و کم‌حجم**
 
 [![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue?logo=githubactions)](.github/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-97%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-informational)
 ![i18n](https://img.shields.io/badge/i18n-English%20%7C%20%D9%81%D8%A7%D8%B1%D8%B3%DB%8C-blueviolet)
 
@@ -29,8 +29,8 @@ RyTy is a lightweight tool for teams to record **what** they worked on, **how lo
 
 - ⏱️ **Timer tracking** — start / pause / resume / stop / cancel; timekeeping is computed **server-side** and survives refreshes and closed tabs
 - ✍️ **Manual entry** — time range (with overlap detection) or duration-only
-- 💸 **Expenses** — quick expense entry from a second Home tab; admin-configurable currency label (TMN, IRR, USD, …)
-- 🗓️ **Jalali or Gregorian display** — admin setting; all data stays UTC/Gregorian underneath
+- 💸 **Expenses** — quick expense entry from a second Home tab, with a thousands-separated amount input; admin-configurable currency label (TMN, IRR, USD, …)
+- 🗓️ **Jalali or Gregorian display** — admin setting; all data stays UTC/Gregorian underneath, and today's date shows in the app header
 - 📁 **Projects** — admins define public (team-wide) or private projects; users can create their own or suggest one to the admin for public review; everyone can pick a **default project**
 - 🏷️ **Tags** — public tags anyone can create; type a tag and press `,` to attach it, with instant autocomplete
 - 👥 **Co-doers** — add teammates to any task as pair-doers; they see it in their own list and can edit or delete it, while time stays attributed to you
@@ -45,7 +45,7 @@ RyTy is a lightweight tool for teams to record **what** they worked on, **how lo
 
 ## 🖼️ Screenshots
 
-| Mobile (dark)                                                        | Mobile — Persian RTL                                                   |
+| Mobile (dark)                                                        | Mobile — Persian RTL (Jalali date)                                     |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | ![Dashboard mobile dark](docs/screenshots/dashboard-mobile-dark.png) | ![Dashboard Persian RTL](docs/screenshots/dashboard-mobile-fa-rtl.png) |
 
@@ -53,13 +53,17 @@ RyTy is a lightweight tool for teams to record **what** they worked on, **how lo
 | -------------------------------------------------------- | ---------------------------------------------------------- |
 | ![Timer running](docs/screenshots/timer-mobile-dark.png) | ![Activities](docs/screenshots/activities-mobile-dark.png) |
 
-| Desktop dashboard (light)                                          | Desktop reports (light)                                        |
-| ------------------------------------------------------------------ | -------------------------------------------------------------- |
-| ![Dashboard desktop](docs/screenshots/dashboard-desktop-light.png) | ![Reports desktop](docs/screenshots/reports-desktop-light.png) |
+| Desktop dashboard (light)                                          | Expenses (desktop, light)                                        |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| ![Dashboard desktop](docs/screenshots/dashboard-desktop-light.png) | ![Expenses desktop](docs/screenshots/expenses-desktop-light.png) |
 
 | Reports (mobile)                                            | Administration — projects                                           |
 | ----------------------------------------------------------- | ------------------------------------------------------------------- |
 | ![Reports mobile](docs/screenshots/reports-mobile-dark.png) | ![Admin projects](docs/screenshots/admin-projects-desktop-dark.png) |
+
+| Desktop reports (light)                                        |
+| -------------------------------------------------------------- |
+| ![Reports desktop](docs/screenshots/reports-desktop-light.png) |
 
 ## 🏗️ Architecture
 
@@ -175,7 +179,7 @@ Cloudflare uses the same names as Worker **vars** (non-secrets) and **secrets** 
 
 ```bash
 npm run typecheck   # strict TS across frontend / backend / shared
-npm test            # 92 unit + integration tests (vitest)
+npm test            # 97 unit + integration tests (vitest)
 npm run build       # production client + server build
 ```
 

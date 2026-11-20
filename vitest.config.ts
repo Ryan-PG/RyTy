@@ -8,7 +8,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["backend/tests/**/*.test.ts"],
+    include: ["backend/tests/**/*.test.ts", "frontend/src/**/*.test.ts"],
     environment: "node",
     // Each test file gets its own process; the libsql native driver is happy there.
     pool: "forks",

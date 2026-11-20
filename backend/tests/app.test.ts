@@ -252,6 +252,10 @@ describe("timer lifecycle", () => {
     expect(stopped.json.data.durationSeconds).toBeGreaterThanOrEqual(2);
     expect(stopped.json.data.startedAt).not.toBeNull();
 
+    // The timed activity lands on the real current date with real elapsed
+    // seconds; delete it so date-based report assertions stay deterministic.
+    await call("DELETE", `/api/activities/${stopped.json.data.id}`, undefined, adminCookie);
+
     const active = await call("GET", "/api/timer/active", undefined, adminCookie);
     expect(active.json.data).toBeNull();
   }, 15000);

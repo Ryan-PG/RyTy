@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { X } from "lucide-react";
 
@@ -124,6 +125,12 @@ export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; childr
 
 /* ------------------------------- Modal ------------------------------ */
 
+/**
+ * Portal-based dialog. Rendering into document.body keeps the overlay above
+ * everything else and — crucially — keeps a dialog's <form> out of any form
+ * it is opened from: a form nested inside another form breaks submit
+ * handling (the browser submits natively and React never sees the event).
+ */
 export function Modal({
   open,
   onClose,
@@ -142,14 +149,19 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // With stacked dialogs (opened from inside another dialog) only the
+      // topmost one — the last dialog in document order — reacts to Escape.
+      const dialogs = document.querySelectorAll("[role='dialog']");
+      if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== ref.current) return;
+      onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       onMouseDown={(e) => {
@@ -178,7 +190,8 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -149,6 +149,22 @@ export function parseAmountToMinor(input: string): number | null {
   return Number.isFinite(minor) && minor > 0 ? minor : null;
 }
 
+/**
+ * Normalise a user-typed amount for display in an input: strip everything
+ * but digits and dots, then group the integer part in thousands with ",".
+ * Typing stays ASCII so `parseAmountToMinor` can consume the value as-is.
+ * "1234567.8" → "1,234,567.8"; "12." keeps its trailing dot mid-typing.
+ */
+export function formatAmountInput(raw: string): string {
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  const dot = cleaned.indexOf(".");
+  const int = dot === -1 ? cleaned : cleaned.slice(0, dot);
+  const frac = dot === -1 ? "" : cleaned.slice(dot + 1).replace(/\./g, "");
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (dot === -1) return grouped;
+  return frac ? `${grouped}.${frac}` : `${grouped}.`;
+}
+
 /** Greeting key by local hour in the user timezone. */export function greetingByHour(hour: number): "morning" | "afternoon" | "evening" {
   if (hour < 12) return "morning";
   if (hour < 18) return "afternoon";

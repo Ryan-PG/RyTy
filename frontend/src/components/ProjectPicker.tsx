@@ -165,6 +165,9 @@ export function CreateProjectModal({ open, isAdmin, onClose, onCreated, createPr
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // The modal is opened from inside another dialog's form; keep the submit
+    // from bubbling through the React tree into that outer form.
+    e.stopPropagation();
     if (!name.trim()) return;
     setSaving(true);
     setError(null);
