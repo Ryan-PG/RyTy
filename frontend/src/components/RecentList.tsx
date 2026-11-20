@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Trash2 } from "lucide-react";
 import type { Expense } from "@ryty/shared";
 import { api } from "../services/api";
-import { useAuth } from "../stores/AuthContext";
 import { useToast } from "../stores/ToastContext";
 import { Card, ConfirmDialog, EmptyState } from "./ui";
 import { ActivityRow } from "./ActivityRow";
-import { formatAmount, formatLocalDate } from "../utils/format";
+import { ExpenseRow } from "./ExpenseRow";
 import type { RecentItem } from "../utils/recent";
 
+/**
+ * The Home "Recent" timeline: tasks and expenses in one list. The 3px
+ * inline-start edge tells the two apart at a glance — task yellow, expense
+ * blue — without extra badges or labels.
+ */
 export function RecentList({
   items,
   timezone,
@@ -27,10 +30,7 @@ export function RecentList({
   onChanged?: () => void;
 }) {
   const { t } = useTranslation();
-  const { language, user } = useAuth();
   const { toast } = useToast();
-  const currency = user?.currency ?? "";
-  const dateFormat = user?.dateFormat ?? "gregorian";
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -66,54 +66,14 @@ export function RecentList({
               className="border-s-[3px] border-s-task"
             />
           ) : (
-            <div
+            <ExpenseRow
               key={`e-${item.expense.id}`}
-              className="group relative flex items-center justify-between gap-3 border-s-[3px] border-s-expense px-3.5 py-2.5"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-text">{item.expense.title}</p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {showDates && (
-                    <span className="tabular">
-                      {formatLocalDate(item.expense.occurredOn, language, undefined, dateFormat)}
-                    </span>
-                  )}
-                  {item.expense.description && (
-                    <>
-                      {showDates && <span aria-hidden> · </span>}
-                      <span className="truncate">{item.expense.description}</span>
-                    </>
-                  )}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-sm font-semibold tabular" dir="ltr">
-                  {formatAmount(item.expense.amountMinor, language)} {currency}
-                </span>
-                {item.expense.userId === user?.id && (
-                  <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
-                    {onEditExpense && (
-                      <button
-                        type="button"
-                        aria-label={t("common.edit")}
-                        className="rounded-[var(--radius-sm)] bg-surface p-1.5 text-muted shadow-sm hover:text-text"
-                        onClick={() => onEditExpense(item.expense)}
-                      >
-                        <Pencil className="size-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={t("common.delete")}
-                      className="rounded-[var(--radius-sm)] bg-surface p-1.5 text-muted shadow-sm hover:text-danger"
-                      onClick={() => setDeleting(item.expense)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+              expense={item.expense}
+              showDate={showDates}
+              className="border-s-[3px] border-s-expense"
+              onEdit={onEditExpense ? () => onEditExpense(item.expense) : undefined}
+              onDelete={() => setDeleting(item.expense)}
+            />
           ),
         )}
       </Card>

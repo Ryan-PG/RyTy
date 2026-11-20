@@ -19,7 +19,7 @@ import { formatDuration, formatDurationCompact, formatToday, greetingByHour, loc
 import { mergeRecent, type RecentItem } from "../utils/recent";
 
 /** Rows shown in the Home "Recent" timeline. */
-const RECENT_LIMIT = 15;
+const RECENT_LIMIT = 20;
 
 /**
  * Home screen: quick activity entry first. Manual-entry modes lead, the

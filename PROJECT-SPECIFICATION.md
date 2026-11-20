@@ -54,7 +54,9 @@ typing. The currency label (e.g. `TMN`, `IRR`, `USD`) is an application-wide
 admin setting shown next to every amount. Expenses support soft delete and
 the same visibility rules as activities (admins / `all_users` see the team;
 everyone else sees only their own). Only the owner can edit or delete an
-expense.
+expense. Expenses also appear in the shared **Activities** history list —
+grouped by day next to tasks, marked by a blue start edge (tasks yellow) —
+and can be added from that page's entry dialog via its Expense tab.
 
 ### 2.4 Projects & tags
 
@@ -185,7 +187,7 @@ reusable later via account settings.
   — **Task** and **Expense**. On the Task tab, two large icon-led mode
   buttons (**Duration only** / **Time range**) sit above the timer. Below
   the entry area, a single mixed **Recent** timeline shows today's tasks and
-  expenses on both tabs (falls back to the latest 15 entries, dated, when
+  expenses on both tabs (falls back to the latest 20 entries, dated, when
   nothing was recorded today); each row carries a colored start edge —
   yellow for tasks, blue for expenses. No big charts, admin widgets, or
   card grids.

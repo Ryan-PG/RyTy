@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Activity, CreateActivityInput } from "@ryty/shared";
+import type { Activity, CreateActivityInput, Expense } from "@ryty/shared";
 import { api, ApiError } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
@@ -9,16 +9,21 @@ import { Button, Field, Input, Modal, Segmented, Textarea } from "./ui";
 import { ProjectPicker } from "./ProjectPicker";
 import { TagInput } from "./TagInput";
 import { CoopPicker } from "./CoopPicker";
-import { todayIn, utcToZonedLocalInput, zonedTimeToUtcIso } from "../utils/format";
+import { formatAmountInput, parseAmountToMinor, todayIn, utcToZonedLocalInput, zonedTimeToUtcIso } from "../utils/format";
 
 type Mode = "range" | "duration";
+type Kind = "task" | "expense";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   /** When provided the modal edits an existing activity. */
   activity?: Activity | null;
+  /** When provided the modal edits an existing expense. */
+  expense?: Expense | null;
   initialMode?: Mode;
+  /** Show the Task/Expense switch (add flows that also accept expenses). */
+  enableExpense?: boolean;
 }
 
 function nowLocalInput(): string {
@@ -44,20 +49,25 @@ function parseDurationInput(value: string): number | null {
 }
 
 /**
- * Manual activity entry (time range or duration-only) and the edit modal
- * for existing activities. Overlap warnings surface the backend 409 and
- * let the user save explicitly.
+ * Manual entry dialog. Tasks: time range or duration-only activity (also
+ * the edit modal for existing activities). With `enableExpense` the dialog
+ * gains an Expense tab (and with `expense` it edits an expense in place).
+ * Overlap warnings surface the backend 409 and let the user save explicitly.
  */
-export function ActivityFormModal({ open, onClose, activity, initialMode = "range" }: Props) {
+export function ActivityFormModal({ open, onClose, activity, expense, initialMode = "range", enableExpense = false }: Props) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { defaultProject } = useProjects();
   const { toast } = useToast();
+  const currency = user?.currency ?? "";
 
-  const isEdit = Boolean(activity);
+  const editingActivity = Boolean(activity);
+  const editingExpense = Boolean(expense);
+  const [kind, setKind] = useState<Kind>("task");
   const [mode, setMode] = useState<Mode>(initialMode);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [amountText, setAmountText] = useState("");
   const [start, setStart] = useState(nowLocalInput());
   const [end, setEnd] = useState(nowLocalInput());
   const [durationText, setDurationText] = useState("0:30");
@@ -73,6 +83,15 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
     if (!open) return;
     setError(null);
     setOverlapCount(null);
+    if (expense) {
+      setKind("expense");
+      setTitle(expense.title);
+      setDescription(expense.description ?? "");
+      setAmountText(formatAmountInput(String(expense.amountMinor / 100)));
+      setOccurredOn(expense.occurredOn);
+      return;
+    }
+    setKind("task");
     if (activity) {
       setTitle(activity.title);
       setDescription(activity.description ?? "");
@@ -94,6 +113,7 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
     } else {
       setTitle("");
       setDescription("");
+      setAmountText("");
       setStart(nowLocalInput());
       setEnd(nowLocalInput());
       setDurationText("0:30");
@@ -104,12 +124,20 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
       setTags([]);
       setCooperatorIds([]);
     }
-  }, [open, activity, initialMode, user?.timezone, defaultProject?.id]);
+  }, [open, activity, expense, initialMode, user?.timezone, defaultProject?.id]);
 
   const durationSeconds = useMemo(() => parseDurationInput(durationText), [durationText]);
+  const amountMinor = useMemo(() => parseAmountToMinor(amountText), [amountText]);
 
   const validate = (): boolean => {
     setError(null);
+    if (kind === "expense") {
+      if (!title.trim() || amountMinor === null) {
+        setError(t("errors.validation_error"));
+        return false;
+      }
+      return true;
+    }
     if (!title.trim()) {
       setError(t("errors.validation_error"));
       return false;
@@ -136,6 +164,23 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
     setSaving(true);
     setError(null);
     try {
+      if (kind === "expense") {
+        const payload = {
+          title: title.trim(),
+          description: description.trim() || null,
+          amountMinor: amountMinor!,
+          occurredOn,
+        };
+        if (expense) {
+          await api.updateExpense(expense.id, payload);
+          toast(t("expenses.updated"));
+        } else {
+          await api.createExpense(payload);
+          toast(t("expenses.saved"));
+        }
+        onClose();
+        return;
+      }
       const shared = {
         title: title.trim(),
         description: description.trim() || null,
@@ -143,7 +188,7 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
         tags,
         cooperatorIds,
       };
-      if (isEdit && activity) {
+      if (editingActivity && activity) {
         await api.updateActivity(
           activity.id,
           mode === "range"
@@ -193,147 +238,199 @@ export function ActivityFormModal({ open, onClose, activity, initialMode = "rang
     }
   };
 
+  const modalTitle = editingExpense
+    ? t("expenses.editTitle")
+    : kind === "expense"
+      ? t("expenses.addTitle")
+      : editingActivity
+        ? t("activities.editTitle")
+        : t("dashboard.manualEntryTitle");
+
   return (
-    <Modal open={open} onClose={onClose} title={isEdit ? t("activities.editTitle") : t("dashboard.manualEntryTitle")}>
+    <Modal open={open} onClose={onClose} title={modalTitle}>
       <form onSubmit={(e) => onSubmit(e)}>
-        {!isEdit && (
+        {!editingActivity && !editingExpense && enableExpense && (
           <div className="mb-3">
-            <Segmented<Mode>
-              ariaLabel={t("dashboard.manualEntryTitle")}
-              value={mode}
-              onChange={(m) => {
-                setMode(m);
+            <Segmented<Kind>
+              ariaLabel={t("dashboard.entryTabs")}
+              value={kind}
+              onChange={(k) => {
+                setKind(k);
                 setOverlapCount(null);
               }}
               options={[
-                { value: "range", label: t("dashboard.rangeTab") },
-                { value: "duration", label: t("dashboard.durationTab") },
+                { value: "task", label: t("dashboard.taskTab") },
+                { value: "expense", label: t("dashboard.expenseTab") },
               ]}
             />
           </div>
         )}
 
-        <div className="flex flex-col gap-3">
-          <Field label={t("dashboard.whatAreYouWorkingOn")} htmlFor="af-title">
-            <Input
-              id="af-title"
-              value={title}
-              required
-              maxLength={200}
-              placeholder={t("dashboard.activityTitlePlaceholder")}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </Field>
-          <Field label={`${t("nav.activities")} — ${t("common.optional")}`} htmlFor="af-desc">
-            <Textarea
-              id="af-desc"
-              value={description}
-              maxLength={2000}
-              placeholder={t("dashboard.descriptionPlaceholder")}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </Field>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label={t("projects.title")}>
-              <ProjectPicker
-                value={projectId}
-                onChange={setProjectId}
-                ariaLabel={t("projects.title")}
+        {kind === "expense" ? (
+          <div className="flex flex-col gap-3">
+            <Field label={t("expenses.whatFor")} htmlFor="af-title">
+              <Input
+                id="af-title"
+                value={title}
+                required
+                maxLength={200}
+                placeholder={t("expenses.titlePlaceholder")}
+                onChange={(e) => setTitle(e.target.value)}
               />
             </Field>
-            <Field label={t("tags.title")} hint={t("tags.hint")}>
-              <TagInput
-                value={tags}
-                onChange={setTags}
-                placeholder={t("tags.placeholder")}
-                ariaLabel={t("tags.title")}
-              />
-            </Field>
-          </div>
-
-          <Field label={t("coops.title")} hint={t("coops.hint")}>
-            <CoopPicker
-              value={cooperatorIds}
-              onChange={setCooperatorIds}
-              ownerId={user?.id}
-              placeholder={t("coops.placeholder")}
-              ariaLabel={t("coops.title")}
-            />
-          </Field>
-
-          {mode === "range" ? (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("dashboard.startTime")} htmlFor="af-start">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label={`${t("expenses.amount")} ${currency ? `(${currency})` : ""}`} htmlFor="af-amount">
                 <Input
-                  id="af-start"
-                  type="datetime-local"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                />
-              </Field>
-              <Field label={t("dashboard.endTime")} htmlFor="af-end">
-                <Input
-                  id="af-end"
-                  type="datetime-local"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                />
-              </Field>
-            </div>
-          ) : (
-            <>
-              <Field label={t("dashboard.duration")} hint={t("dashboard.durationHint")} htmlFor="af-duration">
-                <Input
-                  id="af-duration"
+                  id="af-amount"
                   dir="ltr"
-                  inputMode="numeric"
-                  value={durationText}
-                  onChange={(e) => setDurationText(e.target.value)}
+                  inputMode="decimal"
+                  value={amountText}
+                  placeholder="0.00"
+                  onChange={(e) => setAmountText(formatAmountInput(e.target.value))}
                 />
               </Field>
-              <Field label={t("dashboard.date")} htmlFor="af-date">
+              <Field label={t("dashboard.date")} htmlFor="af-expense-date">
                 <Input
-                  id="af-date"
+                  id="af-expense-date"
                   type="date"
                   value={occurredOn}
                   onChange={(e) => setOccurredOn(e.target.value)}
                 />
               </Field>
-            </>
-          )}
-
-          {overlapCount !== null && (
-            <div className="rounded-[var(--radius)] bg-warning-soft p-2.5 text-sm text-warning" role="alert">
-              {t("dashboard.overlapWarning", { count: overlapCount })}
-              <Button
-                type="button"
-                variant="secondary"
-                className="mt-2 w-full"
-                loading={saving}
-                onClick={(e) => {
-                  void onSubmit(e as unknown as React.FormEvent, true);
-                }}
-              >
-                {t("common.saveAnyway")}
-              </Button>
             </div>
-          )}
+            <Field label={`${t("expenses.description")} — ${t("common.optional")}`} htmlFor="af-expense-desc">
+              <Textarea
+                id="af-expense-desc"
+                value={description}
+                maxLength={2000}
+                placeholder={t("dashboard.descriptionPlaceholder")}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </Field>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <Field label={t("dashboard.whatAreYouWorkingOn")} htmlFor="af-title">
+              <Input
+                id="af-title"
+                value={title}
+                required
+                maxLength={200}
+                placeholder={t("dashboard.activityTitlePlaceholder")}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </Field>
+            <Field label={`${t("nav.activities")} — ${t("common.optional")}`} htmlFor="af-desc">
+              <Textarea
+                id="af-desc"
+                value={description}
+                maxLength={2000}
+                placeholder={t("dashboard.descriptionPlaceholder")}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </Field>
 
-          {error && (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label={t("projects.title")}>
+                <ProjectPicker
+                  value={projectId}
+                  onChange={setProjectId}
+                  ariaLabel={t("projects.title")}
+                />
+              </Field>
+              <Field label={t("tags.title")} hint={t("tags.hint")}>
+                <TagInput
+                  value={tags}
+                  onChange={setTags}
+                  placeholder={t("tags.placeholder")}
+                  ariaLabel={t("tags.title")}
+                />
+              </Field>
+            </div>
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" loading={saving}>
-              {t("common.save")}
+            <Field label={t("coops.title")} hint={t("coops.hint")}>
+              <CoopPicker
+                value={cooperatorIds}
+                onChange={setCooperatorIds}
+                ownerId={user?.id}
+                placeholder={t("coops.placeholder")}
+                ariaLabel={t("coops.title")}
+              />
+            </Field>
+
+            {mode === "range" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t("dashboard.startTime")} htmlFor="af-start">
+                  <Input
+                    id="af-start"
+                    type="datetime-local"
+                    value={start}
+                    onChange={(e) => setStart(e.target.value)}
+                  />
+                </Field>
+                <Field label={t("dashboard.endTime")} htmlFor="af-end">
+                  <Input
+                    id="af-end"
+                    type="datetime-local"
+                    value={end}
+                    onChange={(e) => setEnd(e.target.value)}
+                  />
+                </Field>
+              </div>
+            ) : (
+              <>
+                <Field label={t("dashboard.duration")} hint={t("dashboard.durationHint")} htmlFor="af-duration">
+                  <Input
+                    id="af-duration"
+                    dir="ltr"
+                    inputMode="numeric"
+                    value={durationText}
+                    onChange={(e) => setDurationText(e.target.value)}
+                  />
+                </Field>
+                <Field label={t("dashboard.date")} htmlFor="af-date">
+                  <Input
+                    id="af-date"
+                    type="date"
+                    value={occurredOn}
+                    onChange={(e) => setOccurredOn(e.target.value)}
+                  />
+                </Field>
+              </>
+            )}
+          </div>
+        )}
+
+        {overlapCount !== null && (
+          <div className="rounded-[var(--radius)] bg-warning-soft p-2.5 text-sm text-warning" role="alert">
+            {t("dashboard.overlapWarning", { count: overlapCount })}
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-2 w-full"
+              loading={saving}
+              onClick={(e) => {
+                void onSubmit(e as unknown as React.FormEvent, true);
+              }}
+            >
+              {t("common.saveAnyway")}
             </Button>
           </div>
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" loading={saving}>
+            {t("common.save")}
+          </Button>
         </div>
       </form>
     </Modal>

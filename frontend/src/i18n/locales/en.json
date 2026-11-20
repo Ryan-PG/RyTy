@@ -184,8 +184,8 @@
   "activities": {
     "title": "Activities",
     "searchPlaceholder": "Search title or description…",
-    "empty": "No activities match your filters.",
-    "emptyHint": "Record your first activity from the Home page.",
+    "empty": "Nothing matches your filters.",
+    "emptyHint": "Record your first activity or expense from the Home page.",
     "entryType": {
       "timer": "Timer",
       "range": "Range",
@@ -316,8 +316,8 @@
     "deleted": "Expense deleted.",
     "deleteTitle": "Delete expense",
     "deleteMessage": "Delete \"{{title}}\"? This cannot be undone.",
-    "recent": "Recent expenses",
-    "empty": "No expenses recorded yet.",
-    "emptyHint": "Add your first expense from the form above."
+    "addTitle": "Add expense",
+    "editTitle": "Edit expense",
+    "description": "Description"
   }
 }
