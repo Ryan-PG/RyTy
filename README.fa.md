@@ -13,7 +13,7 @@
 ![License](https://img.shields.io/badge/license-MIT-informational)
 ![i18n](https://img.shields.io/badge/i18n-English%20%7C%20%D9%81%D8%A7%D8%B1%D8%B3%DB%8C-blueviolet)
 
-https://github.com/user-attachments/assets/dac588f2-7986-4398-bf5c-4a08c5bdab78
+https://github.com/user-attachments/assets/ddea72eb-49a9-49a1-89ee-c0ff7ff91074
 
 *▶ Watch the 60-second promo — the agent interviews, mirrors, tests, and reports, end to end.*
 
