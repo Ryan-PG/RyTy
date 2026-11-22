@@ -68,10 +68,12 @@ export function formatLocalDate(
 ): string {
   const [y, m, d] = date.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  // Force the calendar explicitly: fa-IR would otherwise default to the
-  // Persian calendar even when the Gregorian display setting is chosen.
-  const calendar = dateFormat === "jalali" ? "-u-ca-persian" : "-u-ca-gregory";
   try {
+    // Force the calendar explicitly: fa-IR would otherwise default to the
+    // Persian calendar even when the Gregorian display setting is chosen.
+    const calendar = dateFormat === "jalali" ? "-u-ca-persian" : "-u-ca-gregory";
+    // Non-Gregorian calendars append the era after the year in some
+    // locales (e.g. "1405 AP"); strip it so dates read "Azar 2, 1405".
     return new Intl.DateTimeFormat((language === "fa" ? "fa-IR" : "en-US") + calendar, {
       timeZone: "UTC",
       weekday: opts?.weekday,
@@ -79,7 +81,12 @@ export function formatLocalDate(
       month: opts?.month ?? "short",
       day: opts?.day ?? "numeric",
       numberingSystem: language === "fa" ? "arabext" : "latn",
-    }).format(dt);
+    })
+      .formatToParts(dt)
+      .filter((part) => part.type !== "era")
+      .map((part) => part.value)
+      .join("")
+      .trim();
   } catch {
     return date;
   }
