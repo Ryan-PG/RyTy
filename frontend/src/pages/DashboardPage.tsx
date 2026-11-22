@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, CalendarRange, Pause, Play, Square, Timer } from "lucide-react";
-import type { Expense } from "@ryty/shared";
+import type { Activity, Expense } from "@ryty/shared";
 import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
@@ -49,6 +49,7 @@ export function DashboardPage() {
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [manualOpen, setManualOpen] = useState(false);
   const [initialMode, setInitialMode] = useState<"range" | "duration">("range");
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [expenseEditRequest, setExpenseEditRequest] = useState<Expense | null>(null);
 
   const timezone = user?.timezone ?? "UTC";
@@ -332,13 +333,15 @@ export function DashboardPage() {
       )}
 
       <ActivityFormModal
-        open={manualOpen}
+        open={manualOpen || editingActivity !== null}
         onClose={() => {
           setManualOpen(false);
+          setEditingActivity(null);
           void loadRecent();
           void loadSummary();
         }}
         initialMode={initialMode}
+        activity={editingActivity}
       />
         </>
       )}
@@ -355,6 +358,7 @@ export function DashboardPage() {
         <RecentList
           items={recent}
           timezone={timezone}
+          onEditActivity={(activity) => setEditingActivity(activity)}
           onEditExpense={(expense) => {
             setEntryTab("expense");
             setExpenseEditRequest(expense);
