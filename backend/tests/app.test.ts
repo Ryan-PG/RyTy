@@ -288,6 +288,62 @@ describe("reports and visibility", () => {
     expect(own.json.data.totalSeconds).toBe(0);
   });
 
+  it("report summaries include expenses for the range", async () => {
+    const created = await call(
+      "POST",
+      "/api/expenses",
+      { title: "Team lunch", amountMinor: 1500000, occurredOn: "2026-11-19" },
+      adminCookie,
+    );
+    expect(created.status).toBe(201);
+
+    const res = await call("GET", "/api/reports/summary?from=2026-11-13&to=2026-11-19", undefined, adminCookie);
+    expect(res.status).toBe(200);
+    expect(res.json.data.expenseCount).toBe(1);
+    expect(res.json.data.expenseTotalMinor).toBe(1500000);
+    expect(res.json.data.expenseByDay).toEqual([
+      { date: "2026-11-19", amountMinor: 1500000, count: 1 },
+    ]);
+
+    // Private mode: another user's expense is not counted.
+    const sara = await login("sara", "SaraPass12345");
+    const own = await call("GET", "/api/reports/summary?from=2026-11-13&to=2026-11-19", undefined, sara);
+    expect(own.status).toBe(200);
+    expect(own.json.data.expenseCount).toBe(0);
+    expect(own.json.data.expenseTotalMinor).toBe(0);
+    expect(own.json.data.expenseByDay).toEqual([]);
+  });
+
+  it("weekly report covers the rolling seven days ending on the date", async () => {
+    // Dedicated fixtures inside a clean window (no other test writes to
+    // 2026-11-07..2026-11-13), so the totals are deterministic.
+    const task = await call(
+      "POST",
+      "/api/activities",
+      { entryType: "range", title: "Window task", start: "2026-11-12T09:00", end: "2026-11-12T10:00" },
+      adminCookie,
+    );
+    expect(task.status).toBe(201);
+    const expense = await call(
+      "POST",
+      "/api/expenses",
+      { title: "Window expense", amountMinor: 250000, occurredOn: "2026-11-11" },
+      adminCookie,
+    );
+    expect(expense.status).toBe(201);
+
+    const res = await call("GET", "/api/reports/weekly?date=2026-11-13", undefined, adminCookie);
+    expect(res.status).toBe(200);
+    expect(res.json.data.from).toBe("2026-11-07");
+    expect(res.json.data.to).toBe("2026-11-13");
+    // Both kinds of entries inside the window are counted.
+    expect(res.json.data.totalSeconds).toBe(3600);
+    expect(res.json.data.expenseTotalMinor).toBe(250000);
+    expect(res.json.data.expenseByDay).toEqual([
+      { date: "2026-11-11", amountMinor: 250000, count: 1 },
+    ]);
+  });
+
   it("users cannot access admin endpoints", async () => {
     const sara = await login("sara", "SaraPass12345");
     const res = await call("GET", "/api/admin/users", undefined, sara);

@@ -4,6 +4,7 @@ import { forbidden } from "../utils/http";
 import {
   REPORT_VISIBILITY,
   type Activity,
+  type Expense,
   type ReportSummary,
 } from "@ryty/shared";
 
@@ -33,12 +34,12 @@ export async function resolveReportScope(
   return null; // all users
 }
 
-/** Aggregate activities into the standard report summary shape. */
+/** Aggregate activities into the activity part of the report summary. */
 export function summarizeActivities(
   from: string,
   to: string,
   activities: Activity[],
-): ReportSummary {
+): Omit<ReportSummary, "expenseTotalMinor" | "expenseCount" | "expenseByDay"> {
   const byDay = new Map<string, { totalSeconds: number; count: number }>();
   const byUser = new Map<number, { username: string; totalSeconds: number; count: number }>();
   const byTitle = new Map<string, { totalSeconds: number; count: number }>();
@@ -95,6 +96,28 @@ export function summarizeActivities(
       .map(([title, v]) => ({ title, ...v }))
       .sort((a, b) => b.totalSeconds - a.totalSeconds)
       .slice(0, 20),
+  };
+}
+
+/** Expense part of a report summary: totals plus a per-day breakdown. */
+export function summarizeExpenses(
+  expenses: Expense[],
+): Pick<ReportSummary, "expenseTotalMinor" | "expenseCount" | "expenseByDay"> {
+  const byDay = new Map<string, { amountMinor: number; count: number }>();
+  let totalMinor = 0;
+  for (const expense of expenses) {
+    totalMinor += expense.amountMinor;
+    const day = byDay.get(expense.occurredOn) ?? { amountMinor: 0, count: 0 };
+    day.amountMinor += expense.amountMinor;
+    day.count += 1;
+    byDay.set(expense.occurredOn, day);
+  }
+  return {
+    expenseTotalMinor: totalMinor,
+    expenseCount: expenses.length,
+    expenseByDay: [...byDay.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([date, v]) => ({ date, ...v })),
   };
 }
 

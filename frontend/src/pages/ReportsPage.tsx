@@ -6,7 +6,7 @@ import { api } from "../services/api";
 import { useAuth } from "../stores/AuthContext";
 import { useProjects } from "../stores/ProjectsContext";
 import { Button, Card, EmptyState, Input, Segmented, Select, Spinner } from "../components/ui";
-import { formatDurationCompact, formatLocalDate, todayIn } from "../utils/format";
+import { formatAmount, formatDurationCompact, formatLocalDate, todayIn } from "../utils/format";
 
 type Mode = "daily" | "weekly" | "monthly" | "custom";
 
@@ -20,22 +20,15 @@ function shiftDate(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function isoWeekStart(date: string): string {
-  const d = new Date(`${date}T12:00:00Z`);
-  const day = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
-  return d.toISOString().slice(0, 10);
-}
-
 /** Compute the [from, to] range for the selected report mode. */
 function rangeFor(mode: Mode, date: string, customFrom: string, customTo: string): { from: string; to: string } {
   switch (mode) {
     case "daily":
       return { from: date, to: date };
-    case "weekly": {
-      const from = isoWeekStart(date);
-      return { from, to: shiftDate(from, 6) };
-    }
+    case "weekly":
+      // Rolling window: the seven days ending on the selected date — the
+      // latest seven days by default (the date starts at today).
+      return { from: shiftDate(date, -6), to: date };
     case "monthly": {
       const from = `${date.slice(0, 7)}-01`;
       const d = new Date(`${date.slice(0, 7)}-01T12:00:00Z`);
@@ -117,9 +110,15 @@ export function ReportsPage() {
     const today = todayIn(timezone);
     const totals = new Map(last7.byDay.map((d) => [d.date, d.totalSeconds]));
     const counts = new Map(last7.byDay.map((d) => [d.date, d.count]));
+    const amounts = new Map(last7.expenseByDay.map((d) => [d.date, d.amountMinor]));
     return Array.from({ length: 7 }, (_, i) => {
       const day = shiftDate(today, i - 6);
-      return { date: day, totalSeconds: totals.get(day) ?? 0, count: counts.get(day) ?? 0 };
+      return {
+        date: day,
+        totalSeconds: totals.get(day) ?? 0,
+        count: counts.get(day) ?? 0,
+        amountMinor: amounts.get(day) ?? 0,
+      };
     });
   }, [last7, timezone]);
 
@@ -135,6 +134,7 @@ export function ReportsPage() {
   };
 
   const dateFormat = user?.dateFormat ?? "gregorian";
+  const currency = user?.currency ?? "";
 
   const periodLabel = () => {
     const opts: Intl.DateTimeFormatOptions = mode === "monthly" ? { year: "numeric", month: "long" } : { weekday: mode === "daily" ? "long" : undefined, year: "numeric", month: "short", day: "numeric" };
@@ -220,14 +220,15 @@ export function ReportsPage() {
         <div className="flex justify-center py-10">
           <Spinner className="size-5 text-muted" />
         </div>
-      ) : !summary || summary.activityCount === 0 ? (
+      ) : !summary ||
+        (summary.activityCount === 0 && (mode !== "weekly" || summary.expenseCount === 0)) ? (
         <EmptyState title={t("reports.empty")} />
       ) : (
         <>
           <p className="text-sm text-muted">{periodLabel()}</p>
 
-          {/* Summary numbers */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Summary numbers — the weekly tab also reports expenses */}
+          <div className={mode === "weekly" ? "grid grid-cols-2 gap-3 sm:grid-cols-3" : "grid grid-cols-2 gap-3"}>
             <Card className="p-3.5">
               <p className="text-xs font-medium text-muted">{t("reports.totalTime")}</p>
               <p className="mt-1 text-2xl font-semibold tabular" dir="ltr">
@@ -238,6 +239,15 @@ export function ReportsPage() {
               <p className="text-xs font-medium text-muted">{t("reports.activityCount")}</p>
               <p className="mt-1 text-2xl font-semibold tabular">{summary.activityCount}</p>
             </Card>
+            {mode === "weekly" && (
+              <Card className="p-3.5">
+                <p className="text-xs font-medium text-muted">{t("reports.expenses")}</p>
+                <p className="mt-1 text-2xl font-semibold tabular" dir="ltr">
+                  {formatAmount(summary.expenseTotalMinor, language)}
+                  {currency ? <span className="text-sm font-medium text-muted"> {currency}</span> : null}
+                </p>
+              </Card>
+            )}
           </div>
 
           {/* Per user (when visible) */}
@@ -300,7 +310,9 @@ export function ReportsPage() {
       )}
 
       {/* Per day — always exactly the past 7 days, independent of the
-          selected period. Quiet horizontal bars, no chart library. */}
+          selected period. Each row carries the day's task time (bar) and,
+          when present, its expense amount. Quiet horizontal bars, no chart
+          library. */}
       {last7Days.length > 0 && (
         <Card className="p-3.5">
           <div className="mb-2.5 flex items-baseline justify-between">
@@ -319,6 +331,9 @@ export function ReportsPage() {
                 </div>
                 <span className="w-16 shrink-0 text-end text-xs font-medium tabular" dir="ltr">
                   {formatDurationCompact(d.totalSeconds, language)}
+                </span>
+                <span className="w-24 shrink-0 text-end text-xs text-muted tabular" dir="ltr">
+                  {d.amountMinor > 0 ? `${formatAmount(d.amountMinor, language)} ${currency}` : ""}
                 </span>
               </div>
             ))}

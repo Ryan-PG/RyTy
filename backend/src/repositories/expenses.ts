@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { expenses, users } from "../database/schema";
 import type { AppDatabase } from "../database/adapter";
 import type { Expense, ExpenseListQuery } from "@ryty/shared";
@@ -89,6 +89,29 @@ export function createExpenseRepository(db: AppDatabase) {
         data: rows.map((r) => toExpense(r.expense, r.username)),
         total: totalRow?.value ?? 0,
       };
+    },
+
+    /** All expenses within an occurred_on range, for report aggregation. */
+    async listRange(userIds: number[] | null, from: string, to: string): Promise<Expense[]> {
+      const conditions = [
+        isNull(expenses.deletedAt),
+        gte(expenses.occurredOn, from),
+        lte(expenses.occurredOn, to),
+      ];
+      if (userIds && userIds.length > 0) {
+        conditions.push(
+          sql`${expenses.userId} IN (${sql.join(userIds.map((id) => sql`${id}`), sql`, `)})`,
+        );
+      } else if (userIds && userIds.length === 0) {
+        return [];
+      }
+      const rows = await db
+        .select({ expense: expenses, username: users.username })
+        .from(expenses)
+        .leftJoin(users, eq(users.id, expenses.userId))
+        .where(and(...conditions))
+        .orderBy(asc(expenses.occurredOn));
+      return rows.map((r) => toExpense(r.expense, r.username));
     },
 
     async create(input: CreateExpenseInput): Promise<Expense> {

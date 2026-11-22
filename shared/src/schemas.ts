@@ -295,7 +295,7 @@ export const dailyReportQuerySchema = z.object({
 });
 
 export const weeklyReportQuerySchema = z.object({
-  /** Any date within the requested ISO week. */
+  /** Any date; the weekly window is the rolling seven days ending on it. */
   date: localDateSchema,
   userId: z.coerce.number().int().positive().optional(),
 });

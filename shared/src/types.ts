@@ -150,4 +150,9 @@ export interface ReportSummary {
   byProject: { projectId: number | null; projectName: string; totalSeconds: number; count: number }[];
   /** Aggregated per activity title (top entries). */
   byTitle: { title: string; totalSeconds: number; count: number }[];
+  /** Expense totals for the same range (subject to the same visibility rules). */
+  expenseTotalMinor: number;
+  expenseCount: number;
+  /** Expenses aggregated per local day, ascending. */
+  expenseByDay: { date: string; amountMinor: number; count: number }[];
 }
