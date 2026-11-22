@@ -60,7 +60,10 @@ export function formatDurationCompact(totalSeconds: number, language: Language):
 export function formatLocalDate(
   date: string,
   language: Language,
-  opts?: Intl.DateTimeFormatOptions,
+  /** Date field options; `year: false` omits the year (compact labels). */
+  opts?: Omit<Intl.DateTimeFormatOptions, "year"> & {
+    year?: Intl.DateTimeFormatOptions["year"] | false;
+  },
   dateFormat: "gregorian" | "jalali" = "gregorian",
 ): string {
   const [y, m, d] = date.split("-").map(Number);
@@ -72,7 +75,7 @@ export function formatLocalDate(
     return new Intl.DateTimeFormat((language === "fa" ? "fa-IR" : "en-US") + calendar, {
       timeZone: "UTC",
       weekday: opts?.weekday,
-      year: opts?.year ?? "numeric",
+      year: opts?.year === false ? undefined : (opts?.year ?? "numeric"),
       month: opts?.month ?? "short",
       day: opts?.day ?? "numeric",
       numberingSystem: language === "fa" ? "arabext" : "latn",

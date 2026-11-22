@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import type { ReportSummary } from "@ryty/shared";
@@ -216,6 +216,44 @@ export function ReportsPage() {
         )}
       </div>
 
+      {/* Per day — directly below the filters: the latest seven days as a
+          glanceable mini report, independent of the selected period. Each
+          row carries the day's task time (bar) and, when present, its
+          expense amount. One shared grid for all rows keeps the columns
+          aligned whatever the label widths (e.g. Jalali dates); no chart
+          library. */}
+      {last7Days.length > 0 && (
+        <Card className="p-3.5">
+          <div className="mb-2.5 flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-muted">{t("reports.perDay")}</h2>
+            <span className="text-xs text-faint">{t("reports.last7Days")}</span>
+          </div>
+          {/* Amounts appear from sm up; on phones the row keeps date +
+              bar + duration (expense totals live in the summary cards). */}
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2.5 gap-y-1.5 sm:grid-cols-[auto_1fr_auto_auto]">
+            {last7Days.map((d) => (
+              <Fragment key={d.date}>
+                <span className="whitespace-nowrap text-xs text-muted">
+                  {formatLocalDate(d.date, language, { weekday: "short", month: "short", day: "numeric", year: false }, dateFormat)}
+                </span>
+                <div className="h-2 min-w-4 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${Math.round((d.totalSeconds / maxDaySeconds) * 100)}%` }}
+                  />
+                </div>
+                <span className="whitespace-nowrap text-end text-xs font-medium tabular" dir="ltr">
+                  {formatDurationCompact(d.totalSeconds, language)}
+                </span>
+                <span className="hidden whitespace-nowrap text-end text-xs text-muted tabular sm:block" dir="ltr">
+                  {d.amountMinor > 0 ? `${formatAmount(d.amountMinor, language)} ${currency}` : ""}
+                </span>
+              </Fragment>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner className="size-5 text-muted" />
@@ -307,38 +345,6 @@ export function ReportsPage() {
           )}
 
         </>
-      )}
-
-      {/* Per day — always exactly the past 7 days, independent of the
-          selected period. Each row carries the day's task time (bar) and,
-          when present, its expense amount. Quiet horizontal bars, no chart
-          library. */}
-      {last7Days.length > 0 && (
-        <Card className="p-3.5">
-          <div className="mb-2.5 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-muted">{t("reports.perDay")}</h2>
-            <span className="text-xs text-faint">{t("reports.last7Days")}</span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {last7Days.map((d) => (
-              <div key={d.date} className="flex items-center gap-2.5">
-                <span className="w-28 shrink-0 text-xs text-muted">{formatLocalDate(d.date, language, { weekday: "short", month: "short", day: "numeric" }, dateFormat)}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
-                  <div
-                    className="h-full rounded-full bg-accent"
-                    style={{ width: `${Math.round((d.totalSeconds / maxDaySeconds) * 100)}%` }}
-                  />
-                </div>
-                <span className="w-16 shrink-0 text-end text-xs font-medium tabular" dir="ltr">
-                  {formatDurationCompact(d.totalSeconds, language)}
-                </span>
-                <span className="w-24 shrink-0 text-end text-xs text-muted tabular" dir="ltr">
-                  {d.amountMinor > 0 ? `${formatAmount(d.amountMinor, language)} ${currency}` : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
       )}
     </div>
   );
