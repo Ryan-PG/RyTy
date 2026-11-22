@@ -76,7 +76,7 @@ export function createExpenseRepository(db: AppDatabase) {
         .from(expenses)
         .leftJoin(users, eq(users.id, expenses.userId))
         .where(where)
-        .orderBy(desc(expenses.occurredOn), desc(expenses.id))
+        .orderBy(desc(expenses.createdAt), desc(expenses.id))
         .limit(pageSize)
         .offset((page - 1) * pageSize);
 

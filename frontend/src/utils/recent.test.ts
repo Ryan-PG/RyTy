@@ -37,62 +37,70 @@ function makeExpense(partial: Partial<Expense>): Expense {
 }
 
 describe("mergeRecent", () => {
-  it("orders a day's timed entries before its date-only records", () => {
+  it("orders purely by creation date, newest first", () => {
     const items = mergeRecent(
+      [makeActivity({ id: 1, title: "Old task", createdAt: "2026-11-20T08:00:00Z" })],
       [
-        makeActivity({ id: 1, title: "Range", startedAt: "2026-11-20T05:30:00Z", endedAt: "2026-11-20T08:00:00Z" }),
-      ],
-      [
-        makeExpense({ id: 2, title: "Later expense", createdAt: "2026-11-20T09:00:00Z" }),
-        makeExpense({ id: 3, title: "Earlier expense", createdAt: "2026-11-20T02:00:00Z" }),
+        makeExpense({ id: 2, title: "Newest expense", createdAt: "2026-11-20T18:00:00Z" }),
+        makeExpense({ id: 3, title: "Oldest expense", createdAt: "2026-11-20T02:00:00Z" }),
       ],
     );
     expect(items.map((i) => (i.kind === "expense" ? i.expense.title : i.activity.title))).toEqual([
-      "Range",
-      "Later expense",
-      "Earlier expense",
+      "Newest expense",
+      "Old task",
+      "Oldest expense",
     ]);
-    expect(items.map((i) => i.kind)).toEqual(["activity", "expense", "expense"]);
   });
 
-  it("places duration-only entries after timed entries of the same day", () => {
+  it("places a duration added after a time range above it", () => {
+    // The reported bug shape: a duration entry saved later was sorted under
+    // same-day timed entries; creation date must win instead.
     const items = mergeRecent(
       [
-        makeActivity({ id: 1, title: "Timed", startedAt: "2026-11-20T07:00:00Z", endedAt: "2026-11-20T08:00:00Z" }),
-        makeActivity({ id: 2, title: "Duration only", entryType: "duration", occurredOn: "2026-11-20" }),
+        makeActivity({
+          id: 1,
+          title: "Range task",
+          entryType: "range",
+          startedAt: "2026-11-20T08:00:00Z",
+          endedAt: "2026-11-20T10:00:00Z",
+          createdAt: "2026-11-20T09:30:00Z",
+        }),
+        makeActivity({ id: 2, title: "Duration task", entryType: "duration", createdAt: "2026-11-20T11:00:00Z" }),
       ],
       [],
     );
     expect(items.map((i) => (i.kind === "activity" ? i.activity.title : ""))).toEqual([
-      "Timed",
-      "Duration only",
+      "Duration task",
+      "Range task",
     ]);
   });
 
-  it("files a backdated expense under its own day, never above newer days", () => {
-    // Recorded on 2026-11-20 but dated 2026-11-19 — the reported bug shape.
+  it("leads with a backdated expense the user recorded last", () => {
+    // Recorded on 2026-11-20 but dated 2026-11-19 — still the newest record.
     const items = mergeRecent(
       [
-        makeActivity({ id: 1, title: "Today range", occurredOn: "2026-11-20", startedAt: "2026-11-20T07:00:00Z", endedAt: "2026-11-20T09:00:00Z" }),
-        makeActivity({ id: 2, title: "Yesterday range", occurredOn: "2026-11-19", startedAt: "2026-11-19T10:00:00Z", endedAt: "2026-11-19T12:00:00Z" }),
+        makeActivity({
+          id: 1,
+          title: "Today range",
+          occurredOn: "2026-11-20",
+          startedAt: "2026-11-20T07:00:00Z",
+          endedAt: "2026-11-20T09:00:00Z",
+          createdAt: "2026-11-20T07:30:00Z",
+        }),
       ],
       [makeExpense({ id: 3, title: "Backdated expense", occurredOn: "2026-11-19", createdAt: "2026-11-20T18:00:00Z" })],
     );
     expect(items.map((i) => (i.kind === "expense" ? i.expense.title : i.activity.title))).toEqual([
-      "Today range",
-      "Yesterday range",
       "Backdated expense",
+      "Today range",
     ]);
   });
 
-  it("keeps older days after newer ones regardless of record time", () => {
+  it("keeps identical creation timestamps in a stable order", () => {
     const items = mergeRecent(
-      [makeActivity({ id: 1, title: "Old task", occurredOn: "2026-11-18", startedAt: "2026-11-18T09:00:00Z", endedAt: "2026-11-18T10:00:00Z" })],
-      [makeExpense({ id: 2, title: "Old expense", occurredOn: "2026-11-19", createdAt: "2026-11-19T08:00:00Z" })],
+      [makeActivity({ id: 1, title: "Task", createdAt: "2026-11-20T10:00:00Z" })],
+      [makeExpense({ id: 2, title: "Expense", createdAt: "2026-11-20T10:00:00Z" })],
     );
-    expect(items.map((i) => (i.kind === "expense" ? i.expense.title : i.activity.title))).toEqual([
-      "Old expense",
-      "Old task",
-    ]);
+    expect(items.map((i) => i.kind)).toEqual(["activity", "expense"]);
   });
 });

@@ -136,7 +136,7 @@ export function createActivityRepository(db: AppDatabase) {
         .leftJoin(users, eq(users.id, activities.userId))
         .leftJoin(projects, eq(projects.id, activities.projectId))
         .where(where)
-        .orderBy(desc(activities.occurredOn), desc(activities.startedAt), desc(activities.id))
+        .orderBy(desc(activities.createdAt), desc(activities.id))
         .limit(pageSize)
         .offset((page - 1) * pageSize);
 
@@ -207,7 +207,7 @@ export function createActivityRepository(db: AppDatabase) {
         .leftJoin(users, eq(users.id, activities.userId))
         .leftJoin(projects, eq(projects.id, activities.projectId))
         .where(and(...conditions))
-        .orderBy(asc(activities.occurredOn), asc(activities.startedAt));
+        .orderBy(asc(activities.createdAt), asc(activities.id));
       return rows.map((r) => toActivity(r.activity, r.username, r.projectName));
     },
 

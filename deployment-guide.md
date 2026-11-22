@@ -192,7 +192,11 @@ The template contains (excerpt):
 {
   "name": "ryty",
   "main": "backend/src/runtime/cloudflare.ts",
-  "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application" },
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
   "d1_databases": [
     {
       "binding": "DB",

@@ -12,7 +12,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   /** When set, the button renders as an anchor (e.g. file downloads). */
   href?: string;
-  download?: boolean;
+  /** Boolean `true` renders the empty `download` attribute so the browser
+   *  keeps the server-provided filename (Content-Disposition). */
+  download?: boolean | string;
 }
 
 const buttonVariants: Record<ButtonVariant, string> = {
@@ -35,7 +37,7 @@ export function Button({ variant = "primary", loading, className = "", children,
       <a
         className={classes}
         href={href}
-        {...(download !== undefined ? { download } : {})}
+        {...(download !== undefined ? { download: download === true ? "" : download } : {})}
       >
         {children}
       </a>

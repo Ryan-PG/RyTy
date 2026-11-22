@@ -19,6 +19,11 @@
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
+    // /api/* must always reach the Worker: with SPA asset fallback,
+    // navigation requests (e.g. the Reports "Export CSV" link to
+    // /api/reports/export) would otherwise be answered with index.html
+    // and the Worker would never run.
+    "run_worker_first": ["/api/*"],
   },
   "d1_databases": [
     {

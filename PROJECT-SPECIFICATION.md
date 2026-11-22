@@ -189,9 +189,10 @@ reusable later via account settings.
   — **Task** and **Expense**. On the Task tab, two large icon-led mode
   buttons (**Duration only** / **Time range**) sit above the timer. Below
   the entry area, a single mixed **Recent** timeline shows the latest 20
-  tasks and expenses on both tabs — sorted by each record's own day, newest
-  first (within a day, timed entries precede date-only records); rows from
-  earlier days carry their date; each row carries a colored start edge —
+  tasks and expenses on both tabs — sorted by creation date, newest record
+  first (a task or expense the user just saved always leads the list,
+  however far back it is dated); rows from earlier days carry their date;
+  each row carries a colored start edge —
   yellow for tasks, blue for expenses. No big charts, admin widgets, or
   card grids.
 - **Progressive disclosure**: reports, admin, settings in secondary
